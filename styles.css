@@ -1,16 +1,206 @@
+:root {
+  --ink: #f2f4ff;
+  --ink-dim: #a4a8c8;
+  --ground: #0a0b14;
+  --edge: #2c3150;
+  --danger: #ff6a6a;
+  --safe: #7be08a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
   margin: 0;
-  padding: 2rem;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--ground);
+  color: var(--ink);
   font-family: system-ui, sans-serif;
-  line-height: 1.6;
-  color: #1a1a1a;
+}
+
+header {
+  position: relative;
+  z-index: 2;
+  padding: 0.75rem 1rem;
+}
+
+nav a {
+  color: var(--ink-dim);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+nav a:hover,
+nav a:focus-visible {
+  color: var(--ink);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+  border: 0;
 }
 
 main {
-  max-width: 40rem;
-  margin: 0 auto;
+  position: relative;
+  flex: 1;
+  overflow: hidden;
 }
 
-a {
-  color: #0b5fff;
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+
+  /* Stops the browser scrolling/zooming instead of tracking a drag. */
+  touch-action: none;
+  user-select: none;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  pointer-events: none;
+}
+
+.health-bar {
+  flex: 1;
+  max-width: 16rem;
+  height: 0.6rem;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 8%);
+}
+
+.health-fill {
+  height: 100%;
+  background: var(--safe);
+  transition: width 120ms ease, background-color 200ms ease;
+}
+
+.timer {
+  min-width: 2.4rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: center;
+}
+
+.loadout {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.loadout-slot {
+  position: relative;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1.5px solid var(--edge);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 6%);
+}
+
+.loadout-slot[data-weapon] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.loadout-slot[data-weapon="blade"] {
+  border-color: #d9d9e3;
+  color: #d9d9e3;
+}
+
+.loadout-slot[data-weapon="pistol"] {
+  border-color: #8fd0ff;
+  color: #8fd0ff;
+}
+
+.loadout-slot[data-weapon="scattergun"] {
+  border-color: #ffb37a;
+  color: #ffb37a;
+}
+
+.loadout-slot[data-weapon="beam"] {
+  border-color: #ff6ad5;
+  color: #ff6ad5;
+}
+
+.loadout-slot[data-weapon="rocket"] {
+  border-color: #ff6a6a;
+  color: #ff6a6a;
+}
+
+.loadout-slot[data-weapon="turret"] {
+  border-color: #8dffb0;
+  color: #8dffb0;
+}
+
+.end-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgb(10 11 20 / 72%);
+}
+
+/* `display: flex` on the bare class would have equal specificity to (and
+   land later in the cascade than) the UA stylesheet's `[hidden] { display:
+   none }`, silently defeating `hidden` regardless of the attribute. Scoping
+   it to :not([hidden]) is what actually lets `hidden` hide the element. */
+.end-screen:not([hidden]) {
+  display: flex;
+}
+
+.end-screen p {
+  margin: 0;
+  font-size: clamp(1.5rem, 6vw, 2.5rem);
+  font-weight: 800;
+}
+
+.restart-button {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.4rem;
+  border: 1px solid var(--edge);
+  border-radius: 2rem;
+  background: rgb(255 255 255 / 8%);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.restart-button:hover,
+.restart-button:focus-visible {
+  border-color: var(--ink);
 }
