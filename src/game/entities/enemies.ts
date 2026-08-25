@@ -122,11 +122,11 @@ export function radiusFor(kind: EnemyKind): number {
 export function contactDamageFor(kind: EnemyKind): number {
   switch (kind) {
     case "rusher":
-      return 4;
+      return 6;
     case "shooter":
-      return 3;
+      return 4;
     case "tank":
-      return 10;
+      return 15;
   }
 }
 

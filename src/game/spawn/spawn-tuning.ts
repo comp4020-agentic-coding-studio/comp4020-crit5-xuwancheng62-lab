@@ -14,9 +14,9 @@ export interface SpawnTuning {
 }
 
 function defaultSpawnInterval(elapsedSeconds: number): number {
-  const startInterval = 1.6;
-  const minInterval = 0.4;
-  const rampSeconds = 60;
+  const startInterval = 1.4;
+  const minInterval = 0.28;
+  const rampSeconds = 40;
   const t = Math.min(1, Math.max(0, elapsedSeconds / rampSeconds));
   return startInterval + (minInterval - startInterval) * t;
 }

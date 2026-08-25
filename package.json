@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm build && oxlint --ignore-path .gitignore && stylelint \"**/*.css\" --ignore-path .gitignore --allow-empty-input && vitest run",
     "check:evidence": "node scripts/check-evidence.ts",
+    "simulate": "node --import ./scripts/register-ts-imports.mjs scripts/simulate-runs.ts",
     "test": "vitest run"
   },
   "devDependencies": {
