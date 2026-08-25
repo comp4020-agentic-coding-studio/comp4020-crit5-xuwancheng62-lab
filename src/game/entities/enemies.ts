@@ -13,6 +13,7 @@ export interface EnemyState {
   readonly id: string;
   readonly kind: EnemyKind;
   readonly pos: Vector2;
+  readonly radius: number; // collision/hit-test size — also the visual "how big is the blob"
   readonly hp: number;
   readonly maxHp: number;
   /** Meaningful only for kinds that fire (Shooter); harmless dead weight
@@ -102,4 +103,54 @@ export function maxHpFor(kind: EnemyKind): number {
     case "tank":
       return TANK_MAX_HP;
   }
+}
+
+/** Small/plain, medium-with-a-tell, large-and-wide — the visual design's
+ * silhouette sizing carried into the actual hit-test radius, not just the
+ * drawing. */
+export function radiusFor(kind: EnemyKind): number {
+  switch (kind) {
+    case "rusher":
+      return 11;
+    case "shooter":
+      return 14;
+    case "tank":
+      return 22;
+  }
+}
+
+export function contactDamageFor(kind: EnemyKind): number {
+  switch (kind) {
+    case "rusher":
+      return 4;
+    case "shooter":
+      return 3;
+    case "tank":
+      return 10;
+  }
+}
+
+export function findNearestEnemy(pos: Vector2, enemies: readonly EnemyState[]): EnemyState | null {
+  let nearest: EnemyState | null = null;
+  let nearestDistance = Infinity;
+  for (const enemy of enemies) {
+    const d = distance(pos, enemy.pos);
+    if (d < nearestDistance) {
+      nearestDistance = d;
+      nearest = enemy;
+    }
+  }
+  return nearest;
+}
+
+export function spawnEnemy(id: string, kind: EnemyKind, pos: Vector2): EnemyState {
+  return {
+    id,
+    kind,
+    pos,
+    radius: radiusFor(kind),
+    hp: maxHpFor(kind),
+    maxHp: maxHpFor(kind),
+    attackCooldownRemaining: 0,
+  };
 }

@@ -28,3 +28,8 @@ export const DEFAULT_SPAWN_TUNING: SpawnTuning = {
   maxAliveEnemies: 40,
   spawnRingRadius: 420,
 };
+
+/** Survive this long and you win. Placeholder — the spec asks for "a
+ * stranger reaches an ending inside five minutes", not that the run itself
+ * lasts five minutes; this is deliberately much shorter pending playtesting. */
+export const RUN_LENGTH_SECONDS = 90;

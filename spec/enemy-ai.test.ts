@@ -14,7 +14,7 @@ import { length, normalize, subtract } from "../src/game/vector";
 const PLAYER_POS = { x: 0, y: 0 };
 
 function enemyAt(kind: EnemyState["kind"], pos: EnemyState["pos"], attackCooldownRemaining = 0): EnemyState {
-  return { id: "e1", kind, pos, hp: 10, maxHp: 10, attackCooldownRemaining };
+  return { id: "e1", kind, pos, radius: 12, hp: 10, maxHp: 10, attackCooldownRemaining };
 }
 
 describe("stepRusher", () => {

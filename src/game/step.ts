@@ -1,0 +1,357 @@
+// The one per-frame pure reducer. Composes every system below in order;
+// nothing here touches a DOM, a Canvas, or requestAnimationFrame — that's
+// src/app.ts's job, and its job alone. All randomness flows through
+// state.rng; nothing here ever calls Math.random().
+
+import { applyAreaDamage, applyLineDamage, applyPointDamage, isDead } from "./combat";
+import {
+  contactDamageFor,
+  findNearestEnemy,
+  spawnEnemy,
+  stepEnemy,
+  type EnemyState,
+} from "./entities/enemies";
+import {
+  PICKUP_COLLECT_RADIUS,
+  WEAPON_DROP_CHANCE,
+  XP_ORB_VALUE,
+  type Pickup,
+} from "./entities/pickups";
+import {
+  isTurretAlive,
+  spawnTurret,
+  tickTurret,
+} from "./entities/placed-entities";
+import { movePlayer, regenerate } from "./entities/player";
+import {
+  instantiateProjectiles,
+  isExpired,
+  moveProjectile,
+  type Projectile,
+  type ProjectileSpawn,
+} from "./entities/projectiles";
+import { statsAtCharacterLevel } from "./leveling/player-stats";
+import { gainXp } from "./leveling/xp";
+import { circlesOverlap } from "./collision";
+import { nextFloat, pick } from "./rng";
+import { decideSpawns } from "./spawn/spawn-director";
+import { DEFAULT_SPAWN_TUNING, RUN_LENGTH_SECONDS, type SpawnTuning } from "./spawn/spawn-tuning";
+import type { GameState } from "./state";
+import type { Rng, Vector2 } from "./types";
+import {
+  fireBeam,
+  fireBlade,
+  firePistol,
+  fireRocket,
+  fireScattergun,
+  type InstantEffect,
+} from "./weapons/attached-weapons";
+import { fireFist } from "./weapons/fist";
+import { applyPickup } from "./weapons/loadout";
+import {
+  TURRET_CONCURRENT_CAP,
+  beamStats,
+  bladeStats,
+  fistBaseStats,
+  pistolStats,
+  rocketStats,
+  scattergunStats,
+  turretStats,
+} from "./weapons/weapon-stats";
+import { WEAPON_IDS, type WeaponId } from "./weapons/weapon-types";
+import { checkEnding } from "./win-loss";
+
+export interface StepInput {
+  readonly moveVector: Vector2;
+}
+
+const CONTACT_INVULNERABILITY_SECONDS = 0.5;
+const PLAYER_CONTACT_RADIUS = 14;
+const ENEMY_PROJECTILE_SPEED = 90;
+const ENEMY_PROJECTILE_RADIUS = 5;
+const ENEMY_PROJECTILE_DAMAGE = 5;
+const ENEMY_PROJECTILE_LIFESPAN = 2.5;
+
+export function step(
+  state: GameState,
+  input: StepInput,
+  dtSeconds: number,
+  tuning: SpawnTuning = DEFAULT_SPAWN_TUNING,
+): GameState {
+  if (state.ending !== "playing") return state;
+
+  const elapsedSeconds = state.elapsedSeconds + dtSeconds;
+  const characterStats = statsAtCharacterLevel(state.xp.level);
+  let rng: Rng = state.rng;
+  let nextEntityId = state.nextEntityId;
+
+  function allocateId(prefix: string): string {
+    const id = `${prefix}${nextEntityId}`;
+    nextEntityId += 1;
+    return id;
+  }
+
+  /** XP orb always; a weapon pickup sometimes. The one place loot is rolled. */
+  function lootFor(killed: readonly EnemyState[]): Pickup[] {
+    const drops: Pickup[] = [];
+    for (const enemy of killed) {
+      drops.push({ kind: "xp", id: allocateId("d"), pos: enemy.pos, amount: XP_ORB_VALUE });
+      const [roll, afterRoll] = nextFloat(rng);
+      rng = afterRoll;
+      if (roll < WEAPON_DROP_CHANCE) {
+        const [weaponType, afterPick] = pick(rng, WEAPON_IDS);
+        rng = afterPick;
+        drops.push({ kind: "weapon", id: allocateId("d"), pos: enemy.pos, weaponType });
+      }
+    }
+    return drops;
+  }
+
+  // -- player movement + regen ---------------------------------------------
+  let player = movePlayer(state.player, input.moveVector, characterStats.moveSpeed, dtSeconds);
+  player = regenerate(player, characterStats.maxHealth, characterStats.hpRegenPerSecond, dtSeconds);
+
+  // -- spawn director -------------------------------------------------------
+  const spawnResult = decideSpawns(
+    state.spawnDirector,
+    elapsedSeconds,
+    state.enemies.length,
+    player.pos,
+    tuning,
+    rng,
+  );
+  rng = spawnResult.nextRng;
+  const spawnedEnemies: EnemyState[] = spawnResult.spawns.map((spawn) =>
+    spawnEnemy(allocateId("e"), spawn.kind, spawn.pos),
+  );
+
+  // -- enemy AI: movement + (Shooter) firing --------------------------------
+  const pendingProjectileSpawns: ProjectileSpawn[] = [];
+  let enemies: EnemyState[] = [...state.enemies, ...spawnedEnemies].map((enemy) => {
+    const result = stepEnemy(enemy, player.pos, dtSeconds);
+    if (result.firedProjectile) {
+      const direction = directionBetween(result.firedProjectile.from, result.firedProjectile.towards);
+      pendingProjectileSpawns.push({
+        pos: result.firedProjectile.from,
+        vel: { x: direction.x * ENEMY_PROJECTILE_SPEED, y: direction.y * ENEMY_PROJECTILE_SPEED },
+        radius: ENEMY_PROJECTILE_RADIUS,
+        damage: ENEMY_PROJECTILE_DAMAGE,
+        lifespanRemaining: ENEMY_PROJECTILE_LIFESPAN,
+      });
+    }
+    return {
+      ...enemy,
+      pos: {
+        x: enemy.pos.x + result.movement.x * dtSeconds,
+        y: enemy.pos.y + result.movement.y * dtSeconds,
+      },
+      attackCooldownRemaining: result.nextAttackCooldownRemaining,
+    };
+  });
+
+  // -- weapon systems: Fist (always) + loadout slots (attached) ------------
+  const instantEffects: InstantEffect[] = [];
+  const weaponCooldowns: Partial<Record<WeaponId, number>> = { ...state.weaponCooldowns };
+  let fistCooldownRemaining = state.fistCooldownRemaining - dtSeconds;
+
+  const nearestEnemy = findNearestEnemy(player.pos, enemies);
+
+  if (fistCooldownRemaining <= 0) {
+    instantEffects.push(fireFist(player.pos));
+    fistCooldownRemaining = fistBaseStats().cooldownSeconds / characterStats.attackSpeedMultiplier;
+  } else {
+    fistCooldownRemaining = Math.max(0, fistCooldownRemaining);
+  }
+
+  for (const slot of state.loadout.slots) {
+    const cooldownRemaining = (weaponCooldowns[slot.type] ?? 0) - dtSeconds;
+    if (cooldownRemaining > 0) {
+      weaponCooldowns[slot.type] = cooldownRemaining;
+      continue;
+    }
+    if (!nearestEnemy) {
+      weaponCooldowns[slot.type] = 0; // held ready; nothing to aim at yet
+      continue;
+    }
+    const fired = fireAttachedWeapon(slot.type, slot.level, player.pos, nearestEnemy.pos, rng);
+    rng = fired.nextRng;
+    if (fired.effect) instantEffects.push(fired.effect);
+    if (fired.projectiles) pendingProjectileSpawns.push(...fired.projectiles);
+    weaponCooldowns[slot.type] = fired.cooldownSeconds / characterStats.attackSpeedMultiplier;
+  }
+
+  // -- turret: spawning a new one (its OWN attack cadence, once placed, is
+  // handled by tickTurret below — this is only the "make a new one" timer) --
+  let placedEntities = state.placedEntities;
+  let turretSpawnCooldownRemaining = state.turretSpawnCooldownRemaining - dtSeconds;
+  const turretLevel = state.loadout.slots.find((s) => s.type === "turret")?.level;
+  if (turretLevel && turretSpawnCooldownRemaining <= 0 && placedEntities.length < TURRET_CONCURRENT_CAP) {
+    placedEntities = [
+      ...placedEntities,
+      spawnTurret(allocateId("t"), turretLevel, player.pos, elapsedSeconds),
+    ];
+    turretSpawnCooldownRemaining = turretStats(turretLevel).spawnCooldownSeconds;
+  } else {
+    turretSpawnCooldownRemaining = Math.max(0, turretSpawnCooldownRemaining);
+  }
+
+  // -- tick placed entities (turret attacks + expiry) -----------------------
+  const tickedTurrets = placedEntities.map((turret) => tickTurret(turret, enemies, dtSeconds));
+  for (const result of tickedTurrets) {
+    if (result.firedProjectile) pendingProjectileSpawns.push(result.firedProjectile);
+  }
+  placedEntities = tickedTurrets.map((r) => r.turret).filter((t) => isTurretAlive(t, elapsedSeconds));
+
+  // -- apply instant effects (Blade, Fist, Beam) ----------------------------
+  const pickups: Pickup[] = [...state.pickups];
+  for (const effect of instantEffects) {
+    const result =
+      effect.kind === "area"
+        ? applyAreaDamage(enemies, effect.center, effect.radius, effect.damage)
+        : applyLineDamage(enemies, effect.from, effect.to, effect.width, effect.damage);
+    enemies = result.survivors;
+    pickups.push(...lootFor(result.killed));
+  }
+
+  // -- projectiles: instantiate, move, resolve collisions -------------------
+  const instantiated = instantiateProjectiles(pendingProjectileSpawns, nextEntityId);
+  nextEntityId = instantiated.nextId;
+  const movedProjectiles = [...state.projectiles, ...instantiated.projectiles].map((p) =>
+    moveProjectile(p, dtSeconds),
+  );
+
+  const survivingProjectiles: Projectile[] = [];
+  for (const projectile of movedProjectiles) {
+    if (isExpired(projectile)) continue;
+    const hitEnemy = enemies.find((enemy) =>
+      circlesOverlap({ pos: projectile.pos, radius: projectile.radius }, { pos: enemy.pos, radius: enemy.radius }),
+    );
+    if (!hitEnemy) {
+      survivingProjectiles.push(projectile);
+      continue;
+    }
+
+    let afterHit = enemies.map((e) => (e.id === hitEnemy.id ? applyPointDamage(e, projectile.damage) : e));
+    if (projectile.onImpact === "explode" && projectile.explodeRadius && projectile.splashDamage) {
+      const splash = applyAreaDamage(afterHit, projectile.pos, projectile.explodeRadius, projectile.splashDamage);
+      afterHit = splash.survivors;
+      pickups.push(...lootFor(splash.killed));
+    }
+    const killedByDirectHit = afterHit.filter(isDead);
+    pickups.push(...lootFor(killedByDirectHit));
+    enemies = afterHit.filter((e) => !isDead(e));
+    // projectile itself is consumed on its first hit — not kept.
+  }
+
+  // -- player contact damage from enemies, with brief invulnerability -------
+  let contactInvulnerableRemaining = Math.max(0, player.contactInvulnerableRemaining - dtSeconds);
+  let hp = player.hp;
+  if (contactInvulnerableRemaining <= 0) {
+    const touching = enemies.find((enemy) =>
+      circlesOverlap({ pos: player.pos, radius: PLAYER_CONTACT_RADIUS }, { pos: enemy.pos, radius: enemy.radius }),
+    );
+    if (touching) {
+      hp = Math.max(0, hp - contactDamageFor(touching.kind));
+      contactInvulnerableRemaining = CONTACT_INVULNERABILITY_SECONDS;
+    }
+  }
+  player = { ...player, hp, contactInvulnerableRemaining };
+
+  // -- pickups: collected by walking over them, no separate input -----------
+  const remainingPickups: Pickup[] = [];
+  let xp = state.xp;
+  let loadout = state.loadout;
+  for (const pickup of pickups) {
+    const collected = circlesOverlap(
+      { pos: player.pos, radius: PICKUP_COLLECT_RADIUS },
+      { pos: pickup.pos, radius: 0 },
+    );
+    if (!collected) {
+      remainingPickups.push(pickup);
+      continue;
+    }
+    if (pickup.kind === "xp") xp = gainXp(xp, pickup.amount);
+    else loadout = applyPickup(loadout, pickup.weaponType);
+  }
+
+  const ending = checkEnding({ playerHp: player.hp, elapsedSeconds, runLengthSeconds: RUN_LENGTH_SECONDS });
+
+  return {
+    ...state,
+    elapsedSeconds,
+    rng,
+    nextEntityId,
+    ending,
+    player,
+    loadout,
+    xp,
+    enemies,
+    projectiles: survivingProjectiles,
+    placedEntities,
+    pickups: remainingPickups,
+    spawnDirector: spawnResult.nextState,
+    weaponCooldowns,
+    fistCooldownRemaining,
+    turretSpawnCooldownRemaining,
+  };
+}
+
+// --- composition glue, not exported ---------------------------------------
+
+interface AttachedFireResult {
+  effect?: InstantEffect;
+  projectiles?: ProjectileSpawn[];
+  cooldownSeconds: number;
+  nextRng: Rng;
+}
+
+function fireAttachedWeapon(
+  type: WeaponId,
+  level: number,
+  playerPos: Vector2,
+  nearestEnemyPos: Vector2,
+  rng: Rng,
+): AttachedFireResult {
+  switch (type) {
+    case "blade":
+      return { effect: fireBlade(level, playerPos), cooldownSeconds: bladeStats(level).cooldownSeconds, nextRng: rng };
+    case "beam":
+      return {
+        effect: fireBeam(level, playerPos, nearestEnemyPos),
+        cooldownSeconds: beamStats(level).cooldownSeconds,
+        nextRng: rng,
+      };
+    case "pistol":
+      return {
+        projectiles: [firePistol(level, playerPos, nearestEnemyPos)],
+        cooldownSeconds: pistolStats(level).cooldownSeconds,
+        nextRng: rng,
+      };
+    case "scattergun": {
+      const result = fireScattergun(level, playerPos, nearestEnemyPos, rng);
+      return {
+        projectiles: result.spawns,
+        cooldownSeconds: scattergunStats(level).cooldownSeconds,
+        nextRng: result.nextRng,
+      };
+    }
+    case "rocket":
+      return {
+        projectiles: [fireRocket(level, playerPos, nearestEnemyPos)],
+        cooldownSeconds: rocketStats(level).cooldownSeconds,
+        nextRng: rng,
+      };
+    case "turret":
+      // Turret's own fire cadence, once placed, is handled by tickTurret —
+      // as a loadout slot it never fires "from the player" itself.
+      return { cooldownSeconds: Number.POSITIVE_INFINITY, nextRng: rng };
+  }
+}
+
+function directionBetween(from: Vector2, to: Vector2): Vector2 {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return { x: 0, y: 0 };
+  return { x: dx / len, y: dy / len };
+}

@@ -58,14 +58,17 @@ export function scattergunStats(level: number): ScattergunStats {
 }
 
 export interface BeamStats {
-  damagePerSecond: number;
+  /** Dealt once to every enemy the line touches, each time it fires — not a
+   * continuous tick, since the beam is an instant line-hit gated by its own
+   * cooldown, not a persisting hitbox. */
+  damagePerHit: number;
   cooldownSeconds: number;
   width: number;
   rangeDistance: number;
 }
 export function beamStats(level: number): BeamStats {
   return {
-    damagePerSecond: statAt(level, 10, 4),
+    damagePerHit: statAt(level, 8, 3),
     cooldownSeconds: statAt(level, 1.2, -0.15),
     width: statAt(level, 6, 2),
     rangeDistance: statAt(level, 220, 20),

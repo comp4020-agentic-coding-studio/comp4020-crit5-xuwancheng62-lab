@@ -1,0 +1,45 @@
+// Only Pistol, Scattergun and Rocket become real traveling Projectiles.
+// Blade, Fist and Beam are resolved as an instant area/line hit the moment
+// their cooldown fires (see combat.ts) — they never persist across frames,
+// which sidesteps the bookkeeping a "piercing hitbox that lives for 0.2s at
+// 60fps" would need to avoid hitting the same enemy over and over in that
+// window. A traveling projectile has no such problem: it's consumed on its
+// first hit.
+
+import type { EntityId, Vector2 } from "../types";
+import { add, scale } from "../vector";
+
+export interface ProjectileSpawn {
+  readonly pos: Vector2;
+  readonly vel: Vector2;
+  readonly radius: number;
+  readonly damage: number;
+  readonly lifespanRemaining: number;
+  readonly onImpact?: "explode";
+  readonly explodeRadius?: number;
+  readonly splashDamage?: number;
+}
+
+export interface Projectile extends ProjectileSpawn {
+  readonly id: EntityId;
+}
+
+export function instantiateProjectiles(
+  spawns: readonly ProjectileSpawn[],
+  nextId: number,
+): { projectiles: Projectile[]; nextId: number } {
+  const projectiles = spawns.map((spawn, i) => ({ ...spawn, id: `p${nextId + i}` }));
+  return { projectiles, nextId: nextId + spawns.length };
+}
+
+export function moveProjectile(projectile: Projectile, dt: number): Projectile {
+  return {
+    ...projectile,
+    pos: add(projectile.pos, scale(projectile.vel, dt)),
+    lifespanRemaining: projectile.lifespanRemaining - dt,
+  };
+}
+
+export function isExpired(projectile: Projectile): boolean {
+  return projectile.lifespanRemaining <= 0;
+}
