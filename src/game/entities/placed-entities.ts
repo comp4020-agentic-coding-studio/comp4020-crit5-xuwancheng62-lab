@@ -71,6 +71,7 @@ export function tickTurret(
         radius: TURRET_PROJECTILE_RADIUS,
         damage: stats.damage,
         lifespanRemaining: TURRET_PROJECTILE_LIFESPAN,
+        owner: "player",
       },
     };
   }

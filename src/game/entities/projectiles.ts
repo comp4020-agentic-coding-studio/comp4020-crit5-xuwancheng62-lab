@@ -18,6 +18,11 @@ export interface ProjectileSpawn {
   readonly onImpact?: "explode";
   readonly explodeRadius?: number;
   readonly splashDamage?: number;
+  /** "player" (attached weapons + Turret) can only hit enemies; "enemy"
+   * (Shooter's shot) can only hit the player. Without this, an enemy's own
+   * bullet — spawned at its own position — immediately overlaps the enemy
+   * that fired it and kills it on the spot. */
+  readonly owner: "player" | "enemy";
 }
 
 export interface Projectile extends ProjectileSpawn {

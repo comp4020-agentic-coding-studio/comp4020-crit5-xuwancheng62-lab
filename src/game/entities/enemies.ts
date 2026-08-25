@@ -34,17 +34,17 @@ export interface EnemyAiResult {
 
 // Placeholder tuning — see spawn/spawn-tuning.ts for the note this applies
 // everywhere in this codebase: numbers here are guesses pending playtesting.
-export const RUSHER_SPEED = 92;
+export const RUSHER_SPEED = 100;
 export const RUSHER_MAX_HP = 6;
 
-export const TANK_SPEED = 32;
+export const TANK_SPEED = 38;
 export const TANK_MAX_HP = 40;
 
 export const SHOOTER_SPEED = 42;
 export const SHOOTER_MAX_HP = 12;
 export const SHOOTER_PREFERRED_DISTANCE = 200;
 export const SHOOTER_DISTANCE_TOLERANCE = 24;
-export const SHOOTER_FIRE_COOLDOWN_SECONDS = 1.6;
+export const SHOOTER_FIRE_COOLDOWN_SECONDS = 1.2;
 
 function stepRusher(self: EnemyState, playerPos: Vector2): EnemyAiResult {
   const direction = normalize(subtract(playerPos, self.pos));
@@ -122,11 +122,11 @@ export function radiusFor(kind: EnemyKind): number {
 export function contactDamageFor(kind: EnemyKind): number {
   switch (kind) {
     case "rusher":
-      return 11;
+      return 13;
     case "shooter":
-      return 6;
+      return 8;
     case "tank":
-      return 28;
+      return 32;
   }
 }
 

@@ -47,6 +47,7 @@ export function firePistol(level: number, playerPos: Vector2, nearestEnemyPos: V
     radius: stats.projectileRadius,
     damage: stats.damage,
     lifespanRemaining: 2,
+    owner: "player",
   };
 }
 
@@ -69,6 +70,7 @@ export function fireScattergun(
       radius: stats.projectileRadius,
       damage: stats.damagePerPellet,
       lifespanRemaining: 1.2,
+      owner: "player",
     });
   }
   return { spawns, nextRng: currentRng };
@@ -86,5 +88,6 @@ export function fireRocket(level: number, playerPos: Vector2, nearestEnemyPos: V
     onImpact: "explode",
     explodeRadius: stats.explosionRadius,
     splashDamage: stats.splashDamage,
+    owner: "player",
   };
 }

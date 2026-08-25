@@ -91,20 +91,24 @@ export function step(
     return id;
   }
 
-  /** XP orb always; a weapon pickup sometimes. The one place loot is rolled. */
+  // XP is granted the instant a kill lands — no orb, no walking over
+  // anything to collect it. Only a weapon has to be walked over, since
+  // *which* weapon you happen to path near is the point of the design.
+  let xp = state.xp;
+
   function lootFor(killed: readonly EnemyState[]): Pickup[] {
-    const drops: Pickup[] = [];
+    const weaponDrops: Pickup[] = [];
     for (const enemy of killed) {
-      drops.push({ kind: "xp", id: allocateId("d"), pos: enemy.pos, amount: XP_ORB_VALUE });
+      xp = gainXp(xp, XP_ORB_VALUE);
       const [roll, afterRoll] = nextFloat(rng);
       rng = afterRoll;
       if (roll < WEAPON_DROP_CHANCE) {
         const [weaponType, afterPick] = pick(rng, WEAPON_IDS);
         rng = afterPick;
-        drops.push({ kind: "weapon", id: allocateId("d"), pos: enemy.pos, weaponType });
+        weaponDrops.push({ kind: "weapon", id: allocateId("d"), pos: enemy.pos, weaponType });
       }
     }
-    return drops;
+    return weaponDrops;
   }
 
   // -- player movement + regen ---------------------------------------------
@@ -137,6 +141,7 @@ export function step(
         radius: ENEMY_PROJECTILE_RADIUS,
         damage: ENEMY_PROJECTILE_DAMAGE,
         lifespanRemaining: ENEMY_PROJECTILE_LIFESPAN,
+        owner: "enemy",
       });
     }
     return {
@@ -220,9 +225,20 @@ export function step(
     moveProjectile(p, dtSeconds),
   );
 
+  // "player" projectiles (attached weapons + Turret) can only hit enemies;
+  // "enemy" projectiles (Shooter's shot) can only hit the player. Checking
+  // every projectile against the enemies list regardless of owner is
+  // exactly the bug that let a Shooter's own bullet — spawned at its own
+  // position — overlap and kill it the instant it fired.
   const survivingProjectiles: Projectile[] = [];
+  const incomingEnemyFire: Projectile[] = [];
   for (const projectile of movedProjectiles) {
     if (isExpired(projectile)) continue;
+    if (projectile.owner === "enemy") {
+      incomingEnemyFire.push(projectile);
+      continue;
+    }
+
     const hitEnemy = enemies.find((enemy) =>
       circlesOverlap({ pos: projectile.pos, radius: projectile.radius }, { pos: enemy.pos, radius: enemy.radius }),
     );
@@ -243,9 +259,30 @@ export function step(
     // projectile itself is consumed on its first hit — not kept.
   }
 
-  // -- player contact damage from enemies, with brief invulnerability -------
+  // -- player damage: enemy gunfire and melee contact, one shared
+  // invulnerability window so the two sources can't stack into a double hit
+  // the same instant --------------------------------------------------------
   let contactInvulnerableRemaining = Math.max(0, player.contactInvulnerableRemaining - dtSeconds);
   let hp = player.hp;
+
+  for (const projectile of incomingEnemyFire) {
+    if (contactInvulnerableRemaining > 0) {
+      survivingProjectiles.push(projectile); // still airborne; try again next frame
+      continue;
+    }
+    const hitsPlayer = circlesOverlap(
+      { pos: projectile.pos, radius: projectile.radius },
+      { pos: player.pos, radius: PLAYER_CONTACT_RADIUS },
+    );
+    if (hitsPlayer) {
+      hp = Math.max(0, hp - projectile.damage);
+      contactInvulnerableRemaining = CONTACT_INVULNERABILITY_SECONDS;
+      // consumed on hit — not kept
+    } else {
+      survivingProjectiles.push(projectile);
+    }
+  }
+
   if (contactInvulnerableRemaining <= 0) {
     const touching = enemies.find((enemy) =>
       circlesOverlap({ pos: player.pos, radius: PLAYER_CONTACT_RADIUS }, { pos: enemy.pos, radius: enemy.radius }),
@@ -257,9 +294,8 @@ export function step(
   }
   player = { ...player, hp, contactInvulnerableRemaining };
 
-  // -- pickups: collected by walking over them, no separate input -----------
+  // -- weapon pickups: collected by walking over them, no separate input ----
   const remainingPickups: Pickup[] = [];
-  let xp = state.xp;
   let loadout = state.loadout;
   for (const pickup of pickups) {
     const collected = circlesOverlap(
@@ -270,8 +306,7 @@ export function step(
       remainingPickups.push(pickup);
       continue;
     }
-    if (pickup.kind === "xp") xp = gainXp(xp, pickup.amount);
-    else loadout = applyPickup(loadout, pickup.weaponType);
+    loadout = applyPickup(loadout, pickup.weaponType);
   }
 
   const ending = checkEnding({ playerHp: player.hp, elapsedSeconds, runLengthSeconds: RUN_LENGTH_SECONDS });

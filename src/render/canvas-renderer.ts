@@ -166,13 +166,6 @@ function drawProjectile(ctx: CanvasRenderingContext2D, camera: Camera, projectil
 
 function drawPickup(ctx: CanvasRenderingContext2D, camera: Camera, pickup: Pickup): void {
   const screenPos = worldToScreen(camera, pickup.pos);
-  if (pickup.kind === "xp") {
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = "#8dffb0";
-    ctx.fill();
-    return;
-  }
   const color = colorForWeapon(pickup.weaponType);
   ctx.save();
   ctx.translate(screenPos.x, screenPos.y);

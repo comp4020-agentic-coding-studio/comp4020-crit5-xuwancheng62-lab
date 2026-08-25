@@ -92,6 +92,51 @@ describe("step: the whole loop wired together", () => {
   });
 });
 
+describe("step: enemy gunfire cannot hit enemies, including its own shooter", () => {
+  it("a Shooter survives firing its own shot", () => {
+    // Placed inside its preferred band, far from the player, so contact
+    // damage/melee never enters into it — the only thing that could kill
+    // this Shooter is its own bullet, spawned at its own position.
+    const state = createInitialGameState(10);
+    const shooterPos = { x: state.player.pos.x + 200, y: state.player.pos.y };
+    const armed = {
+      ...state,
+      enemies: [
+        {
+          id: "self-shooter",
+          kind: "shooter" as const,
+          pos: shooterPos,
+          radius: 14,
+          hp: 12,
+          maxHp: 12,
+          attackCooldownRemaining: 0, // fires this very tick
+        },
+      ],
+    };
+    const after = step(armed, NO_MOVEMENT, DT);
+    const survivor = after.enemies.find((e) => e.id === "self-shooter");
+    expect(survivor).toBeDefined();
+    expect(survivor?.hp).toBe(12); // undamaged by its own shot
+  });
+
+  it("an enemy projectile passing through a second enemy does not hurt it", () => {
+    const state = createInitialGameState(11);
+    const shooterPos = { x: state.player.pos.x + 200, y: state.player.pos.y };
+    // Directly in the line between the shooter and the player.
+    const bystanderPos = { x: state.player.pos.x + 100, y: state.player.pos.y };
+    const withBystander = {
+      ...state,
+      enemies: [
+        { id: "shooter", kind: "shooter" as const, pos: shooterPos, radius: 14, hp: 12, maxHp: 12, attackCooldownRemaining: 0 },
+        { id: "bystander", kind: "rusher" as const, pos: bystanderPos, radius: 11, hp: 6, maxHp: 6, attackCooldownRemaining: 0 },
+      ],
+    };
+    const after = step(withBystander, NO_MOVEMENT, DT);
+    const bystander = after.enemies.find((e) => e.id === "bystander");
+    expect(bystander?.hp).toBe(6); // enemy fire passes through other enemies untouched
+  });
+});
+
 describe("step: contact damage", () => {
   it("damages the player on contact and grants brief invulnerability", () => {
     const state = createInitialGameState(4);
