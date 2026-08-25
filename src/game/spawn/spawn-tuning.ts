@@ -14,19 +14,19 @@ export interface SpawnTuning {
 }
 
 function defaultSpawnInterval(elapsedSeconds: number): number {
-  const startInterval = 1.4;
-  const minInterval = 0.28;
-  const rampSeconds = 40;
+  const startInterval = 0.9;
+  const minInterval = 0.12;
+  const rampSeconds = 18;
   const t = Math.min(1, Math.max(0, elapsedSeconds / rampSeconds));
   return startInterval + (minInterval - startInterval) * t;
 }
 
 export const DEFAULT_SPAWN_TUNING: SpawnTuning = {
-  shooterIntroducedAtSeconds: 20,
-  tankIntroducedAtSeconds: 40,
+  shooterIntroducedAtSeconds: 12,
+  tankIntroducedAtSeconds: 25,
   spawnIntervalAt: defaultSpawnInterval,
   maxAliveEnemies: 40,
-  spawnRingRadius: 420,
+  spawnRingRadius: 360,
 };
 
 /** Survive this long and you win. Placeholder — the spec asks for "a
