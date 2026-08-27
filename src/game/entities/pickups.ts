@@ -11,6 +11,7 @@
 // player detour for it added friction without adding depth.
 
 import type { EntityId, Vector2 } from "../types";
+import { fistBaseStats } from "../weapons/weapon-stats";
 import type { WeaponId } from "../weapons/weapon-types";
 
 export interface Pickup {
@@ -20,7 +21,9 @@ export interface Pickup {
   readonly weaponType: WeaponId;
 }
 
-export const PICKUP_COLLECT_RADIUS = 16;
+/** Matches Fist's own attack range — walking close enough to fight
+ * something with your bare hands is close enough to grab a weapon too. */
+export const PICKUP_COLLECT_RADIUS = fistBaseStats().range;
 export const XP_ORB_VALUE = 3;
 /** Chance an enemy kill also drops a weapon, on top of its guaranteed XP. */
 export const WEAPON_DROP_CHANCE = 0.18;

@@ -6,8 +6,8 @@
 import type { EnemyState } from "./enemies";
 import type { ProjectileSpawn } from "./projectiles";
 import type { EntityId, Vector2 } from "../types";
-import { distance, normalize, scale, subtract } from "../vector";
-import { turretStats } from "../weapons/weapon-stats";
+import { add, distance, normalize, scale, subtract } from "../vector";
+import { turretStats, WEAPON_KNOCKBACK_DISTANCE } from "../weapons/weapon-stats";
 
 export interface PlacedEntity {
   readonly id: EntityId;
@@ -42,13 +42,20 @@ export interface TurretTickResult {
 const TURRET_PROJECTILE_SPEED = 200;
 const TURRET_PROJECTILE_RADIUS = 4;
 const TURRET_PROJECTILE_LIFESPAN = 1.5;
+/** World units the fired cannonball spawns ahead of the turret's own center,
+ * along its aim direction — roughly where the barrel's muzzle sits, so the
+ * shot doesn't appear to originate from inside the turret's base. Was 15;
+ * bumped to match the larger rendered head (TURRET_HEAD_DIAMETER in
+ * canvas-renderer.ts went from 22 to ~37, a ~1.7x increase) so the muzzle
+ * point tracks the now-bigger barrel's actual visible tip. */
+const TURRET_MUZZLE_FORWARD_DISTANCE = 25;
 
-/** Pure: targets the nearest enemy in range, fires on its own cooldown. */
-export function tickTurret(
-  turret: PlacedEntity,
-  enemies: readonly EnemyState[],
-  dt: number,
-): TurretTickResult {
+/** Pure: nearest enemy in range, or null if nothing to aim at. Shared by
+ * tickTurret (the actual firing decision) and canvas-renderer.ts (the
+ * turret's continuous visual aiming), so a turret's rendered barrel always
+ * points exactly where it would actually fire — never a separately
+ * maintained, potentially-out-of-sync direction. */
+export function turretAimDirection(turret: PlacedEntity, enemies: readonly EnemyState[]): Vector2 | null {
   const stats = turretStats(turret.level);
   let nearest: EnemyState | null = null;
   let nearestDistance = Infinity;
@@ -59,19 +66,31 @@ export function tickTurret(
       nearest = enemy;
     }
   }
+  return nearest ? normalize(subtract(nearest.pos, turret.pos)) : null;
+}
+
+/** Pure: targets the nearest enemy in range, fires on its own cooldown. */
+export function tickTurret(
+  turret: PlacedEntity,
+  enemies: readonly EnemyState[],
+  dt: number,
+): TurretTickResult {
+  const stats = turretStats(turret.level);
+  const direction = turretAimDirection(turret, enemies);
 
   const cooldownRemaining = Math.max(0, turret.attackCooldownRemaining - dt);
-  if (nearest && cooldownRemaining <= 0) {
-    const direction = normalize(subtract(nearest.pos, turret.pos));
+  if (direction && cooldownRemaining <= 0) {
     return {
       turret: { ...turret, attackCooldownRemaining: stats.attackCooldownSeconds },
       firedProjectile: {
-        pos: turret.pos,
+        pos: add(turret.pos, scale(direction, TURRET_MUZZLE_FORWARD_DISTANCE)),
         vel: scale(direction, TURRET_PROJECTILE_SPEED),
         radius: TURRET_PROJECTILE_RADIUS,
         damage: stats.damage,
         lifespanRemaining: TURRET_PROJECTILE_LIFESPAN,
         owner: "player",
+        knockback: WEAPON_KNOCKBACK_DISTANCE,
+        sourceWeapon: "turret",
       },
     };
   }

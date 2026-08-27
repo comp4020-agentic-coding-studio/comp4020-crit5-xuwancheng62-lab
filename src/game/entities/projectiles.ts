@@ -8,6 +8,7 @@
 
 import type { EntityId, Vector2 } from "../types";
 import { add, scale } from "../vector";
+import type { WeaponId } from "../weapons/weapon-types";
 
 export interface ProjectileSpawn {
   readonly pos: Vector2;
@@ -18,11 +19,20 @@ export interface ProjectileSpawn {
   readonly onImpact?: "explode";
   readonly explodeRadius?: number;
   readonly splashDamage?: number;
+  /** Which weapon fired this — purely descriptive, read only by the renderer
+   * to pick a sprite (canvas-renderer.ts). Never consulted by any collision
+   * or damage logic here, so it can't affect gameplay. Absent for enemy fire,
+   * which keeps its own generic look. */
+  readonly sourceWeapon?: WeaponId;
   /** "player" (attached weapons + Turret) can only hit enemies; "enemy"
    * (Shooter's shot) can only hit the player. Without this, an enemy's own
    * bullet — spawned at its own position — immediately overlaps the enemy
    * that fired it and kills it on the spot. */
   readonly owner: "player" | "enemy";
+  /** Distance a surviving hit is shoved along this projectile's travel
+   * direction. Only player-owned projectiles set it — Shooter's shot never
+   * knocks the player back. */
+  readonly knockback?: number;
 }
 
 export interface Projectile extends ProjectileSpawn {

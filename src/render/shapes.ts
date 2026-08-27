@@ -57,6 +57,26 @@ const TANK_SHAPE: BlobShape = {
   eyeRadius: 1.6,
 };
 
+/** Vector fallback only — legless, dark, many small eyes, sized to roughly
+ * match its own collision radius (BOSS_RADIUS in enemies.ts), same as every
+ * other kind's shape. The real look is its raster sprite; this only ever
+ * shows before that image has loaded. */
+const BOSS_SHAPE: BlobShape = {
+  radiusX: 40,
+  radiusY: 40,
+  color: "#3d1f4d",
+  outlineColor: "#1a0d21",
+  outlineWidth: 3,
+  eyeOffsets: [
+    { x: 0, y: -18 },
+    { x: -16, y: -4 },
+    { x: 16, y: -4 },
+    { x: -10, y: 14 },
+    { x: 10, y: 14 },
+  ],
+  eyeRadius: 3,
+};
+
 export function shapeFor(kind: EnemyKind): BlobShape {
   switch (kind) {
     case "rusher":
@@ -65,6 +85,8 @@ export function shapeFor(kind: EnemyKind): BlobShape {
       return SHOOTER_SHAPE;
     case "tank":
       return TANK_SHAPE;
+    case "boss":
+      return BOSS_SHAPE;
   }
 }
 

@@ -7,21 +7,47 @@ import type { GameState } from "../game/state";
 export interface HudElements {
   readonly healthFill: HTMLElement;
   readonly timer: HTMLElement;
+  readonly levelValue: HTMLElement;
   readonly loadoutSlots: readonly HTMLElement[];
   readonly endScreen: HTMLElement;
   readonly endMessage: HTMLElement;
+  readonly bossHealthBar: HTMLElement;
+  readonly bossHealthFill: HTMLElement;
 }
 
 export function queryHud(root: ParentNode): HudElements | null {
   const healthFill = root.querySelector<HTMLElement>('[data-testid="health-fill"]');
   const timer = root.querySelector<HTMLElement>('[data-testid="timer"]');
+  const levelValue = root.querySelector<HTMLElement>('[data-testid="level-value"]');
   const endScreen = root.querySelector<HTMLElement>('[data-testid="end-screen"]');
   const endMessage = root.querySelector<HTMLElement>('[data-testid="end-message"]');
+  const bossHealthBar = root.querySelector<HTMLElement>('[data-testid="boss-health-bar"]');
+  const bossHealthFill = root.querySelector<HTMLElement>('[data-testid="boss-health-fill"]');
   const loadoutSlots = [0, 1, 2].map((i) =>
     root.querySelector<HTMLElement>(`[data-testid="loadout-slot-${i}"]`),
   );
-  if (!healthFill || !timer || !endScreen || !endMessage || loadoutSlots.some((s) => !s)) return null;
-  return { healthFill, timer, loadoutSlots: loadoutSlots as HTMLElement[], endScreen, endMessage };
+  if (
+    !healthFill ||
+    !timer ||
+    !levelValue ||
+    !endScreen ||
+    !endMessage ||
+    !bossHealthBar ||
+    !bossHealthFill ||
+    loadoutSlots.some((s) => !s)
+  ) {
+    return null;
+  }
+  return {
+    healthFill,
+    timer,
+    levelValue,
+    loadoutSlots: loadoutSlots as HTMLElement[],
+    endScreen,
+    endMessage,
+    bossHealthBar,
+    bossHealthFill,
+  };
 }
 
 export function updateHud(hud: HudElements, state: GameState, maxHealth: number): void {
@@ -30,6 +56,8 @@ export function updateHud(hud: HudElements, state: GameState, maxHealth: number)
 
   const remaining = Math.max(0, RUN_LENGTH_SECONDS - state.elapsedSeconds);
   hud.timer.textContent = remaining.toFixed(0);
+
+  hud.levelValue.textContent = String(state.xp.level);
 
   hud.loadoutSlots.forEach((el, index) => {
     const slot = state.loadout.slots[index];
@@ -41,6 +69,15 @@ export function updateHud(hud: HudElements, state: GameState, maxHealth: number)
     el.dataset.weapon = slot.type;
     el.textContent = String(slot.level);
   });
+
+  const boss = state.enemies.find((enemy) => enemy.kind === "boss");
+  if (boss) {
+    hud.bossHealthBar.hidden = false;
+    const bossHealthFraction = Math.max(0, Math.min(1, boss.hp / boss.maxHp));
+    hud.bossHealthFill.style.width = `${(bossHealthFraction * 100).toFixed(1)}%`;
+  } else {
+    hud.bossHealthBar.hidden = true;
+  }
 
   if (state.ending === "playing") {
     hud.endScreen.hidden = true;

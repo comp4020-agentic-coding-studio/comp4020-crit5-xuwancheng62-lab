@@ -9,6 +9,7 @@ import {
   decideSpawns,
 } from "../src/game/spawn/spawn-director";
 import { distance } from "../src/game/vector";
+import { WORLD_RADIUS } from "../src/game/world-bounds";
 
 const PLAYER_POS = { x: 0, y: 0 };
 
@@ -65,7 +66,7 @@ describe("decideSpawns: cadence", () => {
     const result = decideSpawns(
       { nextSpawnAt: 0 },
       5,
-      DEFAULT_SPAWN_TUNING.maxAliveEnemies,
+      DEFAULT_SPAWN_TUNING.maxAliveEnemiesAt(5),
       PLAYER_POS,
       DEFAULT_SPAWN_TUNING,
       createRng(1),
@@ -124,9 +125,11 @@ describe("decideSpawns: which kinds are available", () => {
 });
 
 describe("decideSpawns: viewport independence", () => {
-  it("always spawns exactly spawnRingRadius from the player, regardless of where the player is", () => {
+  it("always spawns exactly spawnRingRadius from the player, regardless of where the player is (within the map)", () => {
     const tuning: SpawnTuning = DEFAULT_SPAWN_TUNING;
-    for (const playerPos of [{ x: 0, y: 0 }, { x: 500, y: -300 }, { x: -1200, y: 900 }]) {
+    // Comfortably inside WORLD_RADIUS, so the boundary clamp never kicks in
+    // here — that's covered separately below.
+    for (const playerPos of [{ x: 0, y: 0 }, { x: 150, y: -90 }, { x: -200, y: 100 }]) {
       const result = decideSpawns(
         { nextSpawnAt: 0 },
         1,
@@ -137,6 +140,25 @@ describe("decideSpawns: viewport independence", () => {
       );
       for (const spawn of result.spawns) {
         expect(distance(spawn.pos, playerPos)).toBeCloseTo(tuning.spawnRingRadius);
+      }
+    }
+  });
+});
+
+describe("decideSpawns: the map boundary applies to spawns too", () => {
+  it("never spawns an enemy beyond WORLD_RADIUS, even when the ring around the player would reach past it", () => {
+    const farPlayerPos = { x: WORLD_RADIUS - 50, y: 0 }; // near the edge
+    for (let seed = 0; seed < 30; seed += 1) {
+      const result = decideSpawns(
+        { nextSpawnAt: 0 },
+        1,
+        0,
+        farPlayerPos,
+        DEFAULT_SPAWN_TUNING,
+        createRng(seed),
+      );
+      for (const spawn of result.spawns) {
+        expect(distance(spawn.pos, { x: 0, y: 0 })).toBeLessThanOrEqual(WORLD_RADIUS);
       }
     }
   });

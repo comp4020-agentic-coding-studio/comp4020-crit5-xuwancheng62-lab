@@ -81,19 +81,39 @@ canvas {
   left: 0;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 1rem 1.25rem;
+
+  /* Bumps every HUD number (timer, level, loadout levels) that sizes itself
+     in em/rem relative to this, without having to restate it everywhere. */
+  font-size: 1.2rem;
   pointer-events: none;
+}
+
+.health-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  background-image: url("./src/sprites/health.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
 }
 
 .health-bar {
   flex: 1;
-  max-width: 16rem;
-  height: 0.6rem;
+
+  /* A sensible floor once the loadout wraps to its own line below on a
+     narrow viewport — otherwise flex:1 alone can squeeze it to a sliver
+     once every other HUD element's own minimum width is accounted for. */
+  min-width: 6rem;
+  max-width: 20rem;
+  height: 1rem;
   overflow: hidden;
-  border: 1px solid var(--edge);
+  border: 2px solid var(--edge);
   border-radius: 1rem;
   background: rgb(255 255 255 / 8%);
 }
@@ -105,23 +125,42 @@ canvas {
 }
 
 .timer {
-  min-width: 2.4rem;
+  min-width: 3.2rem;
+  font-size: 1.3rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: center;
 }
 
+.level {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.level-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  background-image: url("./src/sprites/xp_orb.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
 .loadout {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.55rem;
 }
 
 .loadout-slot {
   position: relative;
-  width: 2.2rem;
-  height: 2.2rem;
-  border: 1.5px solid var(--edge);
-  border-radius: 0.5rem;
+  width: 3.4rem;
+  height: 3.4rem;
+  border: 2px solid var(--edge);
+  border-radius: 0.65rem;
   background: rgb(255 255 255 / 6%);
 }
 
@@ -129,38 +168,75 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 700;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 68% 68%;
+  font-size: 1.3rem;
+  font-weight: 800;
+
+  /* The level number sits on top of a busy icon image — legible either way. */
+  text-shadow: 0 1px 3px rgb(0 0 0 / 95%), 0 0 6px rgb(0 0 0 / 70%);
 }
 
 .loadout-slot[data-weapon="blade"] {
   border-color: #d9d9e3;
   color: #d9d9e3;
+  background-image: url("./src/sprites/katana.png");
 }
 
 .loadout-slot[data-weapon="pistol"] {
   border-color: #8fd0ff;
   color: #8fd0ff;
+  background-image: url("./src/sprites/smg.png");
 }
 
 .loadout-slot[data-weapon="scattergun"] {
   border-color: #ffb37a;
   color: #ffb37a;
+  background-image: url("./src/sprites/scattergun.png");
 }
 
 .loadout-slot[data-weapon="beam"] {
   border-color: #ff6ad5;
   color: #ff6ad5;
+  background-image: url("./src/sprites/beam.png");
 }
 
 .loadout-slot[data-weapon="rocket"] {
   border-color: #ff6a6a;
   color: #ff6a6a;
+  background-image: url("./src/sprites/launcher.png");
 }
 
 .loadout-slot[data-weapon="turret"] {
   border-color: #8dffb0;
   color: #8dffb0;
+  background-image: url("./src/sprites/turret_head.png");
+}
+
+.boss-health-bar {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  z-index: 1;
+  width: min(32rem, 80%);
+  height: 1.4rem;
+  overflow: hidden;
+  border: 2px solid #1a0d21;
+  border-radius: 1rem;
+  background: rgb(0 0 0 / 45%);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.boss-health-bar:not([hidden]) {
+  display: block;
+}
+
+.boss-health-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a2be2, #ff5fae);
+  transition: width 120ms ease;
 }
 
 .end-screen {

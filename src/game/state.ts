@@ -5,11 +5,23 @@ import type { EnemyState } from "./entities/enemies";
 import type { Projectile } from "./entities/projectiles";
 import type { PlacedEntity } from "./entities/placed-entities";
 import type { Pickup } from "./entities/pickups";
+import type { BeamVisual } from "./weapons/attached-weapons";
 import { EMPTY_LOADOUT, type Loadout, type WeaponId } from "./weapons/weapon-types";
 import { INITIAL_XP_PROGRESS, type XpProgress } from "./leveling/xp";
 import { statsAtCharacterLevel } from "./leveling/player-stats";
 import { INITIAL_SPAWN_DIRECTOR_STATE, type SpawnDirectorState } from "./spawn/spawn-director";
 import type { Ending } from "./win-loss";
+
+export interface ExplosionEffect {
+  readonly id: EntityId;
+  readonly pos: Vector2;
+  /** World units — matches the projectile's own explodeRadius so the visual
+   * scales with the actual splash-damage area without changing it. */
+  readonly radius: number;
+  /** Absolute elapsedSeconds the effect started at; age it against the
+   * current elapsedSeconds to fade/remove it. */
+  readonly startedAt: number;
+}
 
 export interface GameState {
   readonly elapsedSeconds: number;
@@ -20,11 +32,20 @@ export interface GameState {
   readonly player: PlayerState;
   readonly loadout: Loadout;
   readonly xp: XpProgress;
+  /** Total enemies killed this run. Only consulted for one thing: the very
+   * first kill (killCount === 0) always drops a weapon, guaranteeing the
+   * opening isn't Fist-only for the whole run on bad luck. */
+  readonly killCount: number;
 
   readonly enemies: readonly EnemyState[];
   readonly projectiles: readonly Projectile[];
   readonly placedEntities: readonly PlacedEntity[];
   readonly pickups: readonly Pickup[];
+  /** One-shot visual effects (currently: an exploding projectile's splash),
+   * purely cosmetic — nothing here is read by any damage/collision logic,
+   * which already ran by the time one of these is created. See
+   * EXPLOSION_EFFECT_DURATION_SECONDS in step.ts for how long one lives. */
+  readonly explosions: readonly ExplosionEffect[];
 
   readonly spawnDirector: SpawnDirectorState;
 
@@ -35,6 +56,19 @@ export interface GameState {
   readonly weaponCooldowns: Readonly<Partial<Record<WeaponId, number>>>;
   readonly fistCooldownRemaining: number;
   readonly turretSpawnCooldownRemaining: number;
+
+  /** The most recently fired Beam's locked visual line, or null before Beam
+   * has ever fired. Set once, at the instant Beam fires (see step.ts); the
+   * renderer draws this fixed geometry for the whole flash window instead of
+   * recomputing direction/target from live state every frame. */
+  readonly beamVisual: BeamVisual | null;
+
+  /** Set true the one tick the Boss is spawned (elapsedSeconds >= 80, see
+   * step.ts) and never cleared — this, not "is a boss currently in
+   * `enemies`", is what lets win-loss.ts tell "never spawned" apart from
+   * "spawned and already killed" after the Boss is removed from `enemies`
+   * on death. */
+  readonly bossSpawned: boolean;
 }
 
 export function nextId(state: GameState, prefix: string): [EntityId, GameState] {
@@ -51,13 +85,17 @@ export function createInitialGameState(seed: number, playerStart: Vector2 = { x:
     player: { pos: playerStart, hp: initialStats.maxHealth, contactInvulnerableRemaining: 0 },
     loadout: EMPTY_LOADOUT,
     xp: INITIAL_XP_PROGRESS,
+    killCount: 0,
     enemies: [],
     projectiles: [],
     placedEntities: [],
     pickups: [],
+    explosions: [],
     spawnDirector: INITIAL_SPAWN_DIRECTOR_STATE,
     weaponCooldowns: {},
     fistCooldownRemaining: 0,
     turretSpawnCooldownRemaining: 0,
+    beamVisual: null,
+    bossSpawned: false,
   };
 }

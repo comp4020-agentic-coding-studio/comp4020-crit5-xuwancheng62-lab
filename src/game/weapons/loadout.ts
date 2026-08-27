@@ -6,7 +6,7 @@
 import type { Loadout, WeaponId, WeaponSlot } from "./weapon-types";
 
 export const MAX_SLOTS = 3;
-export const MAX_LEVEL = 4;
+export const MAX_LEVEL = 8;
 
 /**
  * Pure: never mutates `loadout`. Returns the SAME reference when a pickup

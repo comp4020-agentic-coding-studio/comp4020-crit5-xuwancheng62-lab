@@ -10,5 +10,5 @@ import type { Vector2 } from "../types";
 
 export function fireFist(playerPos: Vector2): AreaEffect {
   const stats = fistBaseStats();
-  return { kind: "area", center: playerPos, radius: stats.range, damage: stats.damage };
+  return { kind: "area", center: playerPos, radius: stats.range, damage: stats.damage, knockback: stats.knockback };
 }

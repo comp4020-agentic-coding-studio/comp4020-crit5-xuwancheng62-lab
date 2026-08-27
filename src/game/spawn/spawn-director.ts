@@ -1,8 +1,9 @@
-import type { EnemyKind } from "../entities/enemies";
+import { radiusFor, type EnemyKind } from "../entities/enemies";
 import { nextAngle, pick } from "../rng";
 import type { SpawnTuning } from "./spawn-tuning";
 import type { Rng, Vector2 } from "../types";
 import { add, fromAngle } from "../vector";
+import { clampToWorld } from "../world-bounds";
 
 export interface SpawnDirectorState {
   readonly nextSpawnAt: number; // absolute elapsedSeconds
@@ -41,14 +42,17 @@ export function decideSpawns(
   tuning: SpawnTuning,
   rng: Rng,
 ): DecideSpawnsResult {
-  if (elapsedSeconds < state.nextSpawnAt || currentEnemyCount >= tuning.maxAliveEnemies) {
+  if (elapsedSeconds < state.nextSpawnAt || currentEnemyCount >= tuning.maxAliveEnemiesAt(elapsedSeconds)) {
     return { spawns: [], nextState: state, nextRng: rng };
   }
 
   const kinds = kindsAvailableAt(elapsedSeconds, tuning);
   const [kind, rngAfterPick] = pick(rng, kinds);
   const [angle, rngAfterAngle] = nextAngle(rngAfterPick);
-  const pos = add(playerPos, fromAngle(angle, tuning.spawnRingRadius));
+  // Clamped so a player standing near the boundary never causes a spawn
+  // request beyond it — the map's edge applies to everything, not just
+  // the player.
+  const pos = clampToWorld(add(playerPos, fromAngle(angle, tuning.spawnRingRadius)), radiusFor(kind));
 
   return {
     spawns: [{ kind, pos }],

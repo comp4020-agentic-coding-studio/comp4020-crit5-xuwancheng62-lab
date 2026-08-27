@@ -31,15 +31,24 @@
       <canvas data-testid="game-canvas"></canvas>
 
       <div class="hud" data-testid="hud">
+        <div class="health-icon" aria-hidden="true"></div>
         <div class="health-bar" data-testid="health-bar">
           <div class="health-fill" data-testid="health-fill"></div>
         </div>
         <div class="timer" data-testid="timer">90</div>
+        <div class="level" data-testid="level">
+          <div class="level-icon" aria-hidden="true"></div>
+          <span data-testid="level-value">1</span>
+        </div>
         <div class="loadout" data-testid="loadout">
           <div class="loadout-slot" data-testid="loadout-slot-0"></div>
           <div class="loadout-slot" data-testid="loadout-slot-1"></div>
           <div class="loadout-slot" data-testid="loadout-slot-2"></div>
         </div>
+      </div>
+
+      <div class="boss-health-bar" data-testid="boss-health-bar" hidden>
+        <div class="boss-health-fill" data-testid="boss-health-fill"></div>
       </div>
 
       <div class="end-screen" data-testid="end-screen" hidden>
