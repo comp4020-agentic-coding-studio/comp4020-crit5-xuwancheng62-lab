@@ -260,12 +260,14 @@ function spriteScaleFor(kind: EnemyKind): number {
   return kind === "tank" ? 1.7 : 2.6;
 }
 
-/** "Approximately 1.6-1.8x larger than the Tank", per the brief — computed
- * directly from Tank's own current rendered diameter (shape.radiusX *
- * spriteScaleFor("tank")) rather than through Boss's own shape.radiusX, so
- * the relationship stays exactly what the brief describes even if Tank's
- * own numbers change later. */
-const BOSS_RENDER_SCALE_OVER_TANK = 1.7;
+/** How much bigger the Boss renders than the Tank — computed directly from
+ * Tank's own current rendered diameter (shape.radiusX * spriteScaleFor
+ * ("tank")) rather than through Boss's own shape.radiusX, so the
+ * relationship holds even if Tank's own numbers change later. Bumped from
+ * the original 1.7x to 2.6x for a more imposing presence — purely visual,
+ * same as every other size-only pass in this file: BOSS_RADIUS (the actual
+ * collision size, in entities/enemies.ts) is untouched. */
+const BOSS_RENDER_SCALE_OVER_TANK = 2.6;
 /** "Slightly slower" than every other enemy's WALK_FRAME_SECONDS cadence —
  * a legless hover reads as heavier/slower than a walk cycle. */
 const BOSS_ANIMATION_FRAME_SECONDS = WALK_FRAME_SECONDS * 1.5;
@@ -294,11 +296,29 @@ function drawBossWarningGlow(ctx: CanvasRenderingContext2D, camera: Camera, scre
   ctx.restore();
 }
 
+/** A soft dark ellipse under the Boss, always on (not just during a
+ * warning) — since it hovers rather than standing on legs, a ground shadow
+ * is what actually sells its scale and weight, the way the eye-glow ring
+ * sells its attacks. */
+function drawBossGroundShadow(ctx: CanvasRenderingContext2D, camera: Camera, screenPos: Vector2, diameter: number): void {
+  const radiusX = worldLengthToScreen(camera, diameter * 0.34);
+  const radiusY = worldLengthToScreen(camera, diameter * 0.14);
+  const shadowY = screenPos.y + worldLengthToScreen(camera, diameter * 0.42);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(screenPos.x, shadowY, radiusX, radiusY, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawEnemy(ctx: CanvasRenderingContext2D, camera: Camera, enemy: EnemyState, elapsedSeconds: number): void {
   const shape = shapeFor(enemy.kind);
   const screenPos = worldToScreen(camera, enemy.pos);
   const targetDiameter = targetSpriteDiameterFor(enemy.kind, shape);
   const isBoss = enemy.kind === "boss";
+
+  if (isBoss) drawBossGroundShadow(ctx, camera, screenPos, targetDiameter);
 
   const drewSprite = drawCharacterSprite(
     ctx,
@@ -468,6 +488,40 @@ function drawRotatedSpriteCentered(
   ctx.translate(screenPos.x, screenPos.y);
   ctx.rotate(rotationRadians);
   ctx.drawImage(img, -width / 2, -height / 2, width, height);
+  ctx.restore();
+  return true;
+}
+
+/** Purely visual fattening of the drawn Beam — applied to both the sprite
+ * and its canvas-line fallback at their one shared call site, never to
+ * beamStats.width (the real hit-test width) or anything gameplay reads. */
+const BEAM_VISUAL_THICKNESS_MULTIPLIER = 1.5;
+
+/** SPRITES.laserBeam stretched from `fromScreen` to `toScreen` and rotated
+ * to match — unlike every other sprite draw here, this deliberately does
+ * NOT preserve the image's own aspect ratio: length has to match however
+ * far this exact shot reached, while thickness stays whatever
+ * `thicknessScreen` says regardless of length, which is what "stretch only
+ * along its length" means. Anchored at `fromScreen` (not centered) since
+ * the art's own left edge is a bright origin point and its right edge
+ * tapers to the target — drawImage's natural left-to-right, alpha-aware
+ * compositing lines that up with no extra work. */
+function drawBeamSprite(
+  ctx: CanvasRenderingContext2D,
+  fromScreen: Vector2,
+  toScreen: Vector2,
+  thicknessScreen: number,
+): boolean {
+  const img = SPRITES.laserBeam;
+  if (!ready(img)) return false;
+  const dx = toScreen.x - fromScreen.x;
+  const dy = toScreen.y - fromScreen.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 0) return false;
+  ctx.save();
+  ctx.translate(fromScreen.x, fromScreen.y);
+  ctx.rotate(Math.atan2(dy, dx));
+  ctx.drawImage(img, 0, -thicknessScreen / 2, length, thicknessScreen);
   ctx.restore();
   return true;
 }
@@ -694,12 +748,20 @@ function drawWeaponFlash(
       if (visual) {
         const from = worldToScreen(camera, visual.from);
         const to = worldToScreen(camera, visual.to);
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.strokeStyle = "rgba(255,106,213,0.85)";
-        ctx.lineWidth = worldLengthToScreen(camera, visual.width);
-        ctx.stroke();
+        // visual.width is beamStats(level).width, the actual hit-test width
+        // (see fireBeam in attached-weapons.ts) — BEAM_VISUAL_THICKNESS_
+        // MULTIPLIER only fattens how thick it's *drawn*, centered on the
+        // same locked from/to line either way, never the hitbox itself.
+        const thickness = worldLengthToScreen(camera, visual.width) * BEAM_VISUAL_THICKNESS_MULTIPLIER;
+        const drewSprite = drawBeamSprite(ctx, from, to, thickness);
+        if (!drewSprite) {
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+          ctx.strokeStyle = "rgba(255,106,213,0.85)";
+          ctx.lineWidth = thickness;
+          ctx.stroke();
+        }
       }
     }
   }

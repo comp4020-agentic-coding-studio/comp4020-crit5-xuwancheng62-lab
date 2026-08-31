@@ -8,12 +8,22 @@ import type { Camera } from "./game/camera";
 import { statsAtCharacterLevel } from "./game/leveling/player-stats";
 import { createInitialGameState, type GameState } from "./game/state";
 import { step } from "./game/step";
+import { WEAPON_IDS } from "./game/weapons/weapon-types";
 import { attachKeyboardMovement } from "./input/keyboard-source";
 import { combineMovementSources } from "./input/movement-input";
 import { attachPointerMovement } from "./input/pointer-source";
 import { renderFrame } from "./render/canvas-renderer";
 import { queryHud, updateHud } from "./render/hud";
-import { playBossRoar, playTankChargeWarning, primeTankWarningAudio } from "./audio/tank-warning";
+import { primeAudio } from "./audio/audio-context";
+import { playBackgroundMusic } from "./audio/music";
+import {
+  playBossRoar,
+  playSoundEffect,
+  playTankWindupRoar,
+  playTurretFire,
+  playWeaponFireSound,
+  preloadSoundEffects,
+} from "./audio/sound-effects";
 
 // A backgrounded tab can hand rAF one huge elapsed gap on refocus; without a
 // clamp that would spawn-storm or let a fast projectile tunnel straight
@@ -59,9 +69,18 @@ export function initGame(root: ParentNode = document): () => void {
   ]);
 
   // Audio needs a real user gesture to start (browser autoplay rules) —
-  // the player's first key press or tap doubles as that gesture.
-  window.addEventListener("pointerdown", primeTankWarningAudio, { once: true });
-  window.addEventListener("keydown", primeTankWarningAudio, { once: true });
+  // the player's first key press or tap doubles as that gesture. Kicking
+  // off preloadSoundEffects() right after priming means the decode delay
+  // (network fetch + decodeAudioData) is long done by the time any of them
+  // actually needs to play. playBackgroundMusic() starts the looping track
+  // the same instant — it no-ops on every call after its first.
+  function primeAllAudio(): void {
+    primeAudio();
+    preloadSoundEffects();
+    playBackgroundMusic();
+  }
+  window.addEventListener("pointerdown", primeAllAudio, { once: true });
+  window.addEventListener("keydown", primeAllAudio, { once: true });
 
   // Edge-triggered off state alone: a Tank's chargePhase turning "windup"
   // this frame (and not last frame) is exactly the moment to play the
@@ -73,6 +92,21 @@ export function initGame(root: ParentNode = document): () => void {
   // otherwise-persistent state, not events GameState itself carries.
   let previousBossSpawned = false;
   let previousBossPhase = "idle";
+  let previousBossAlive = false;
+  // A weapon's own cooldown only ever counts down except at the exact
+  // instant it fires and gets reset to a fresh full value — so an increase
+  // frame-to-frame is precisely "this weapon just fired", with no need to
+  // re-derive cooldownSecondsFor/attackSpeedMultiplier here at all.
+  let previousWeaponCooldowns: Partial<Record<string, number>> = {};
+  // Same idea, per placed Turret instance (its own attackCooldownRemaining,
+  // not weaponCooldowns.turret — that one only tracks the "deploy the next
+  // batch" timer, not an individual shot).
+  let previousTurretCooldownById = new Map<string, number>();
+  // A new id appearing in state.explosions is a rocket having just detonated.
+  let previousExplosionIds = new Set<string>();
+  // contactInvulnerableRemaining is 0 except right after a hit, when it
+  // jumps up to the full invulnerability window — that jump is the edge.
+  let previousContactInvulnerableRemaining = 0;
 
   function restart(): void {
     state = createInitialGameState((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
@@ -81,6 +115,11 @@ export function initGame(root: ParentNode = document): () => void {
     cameraFollow = initialCameraFollowState(state.player.pos);
     previousBossSpawned = false;
     previousBossPhase = "idle";
+    previousBossAlive = false;
+    previousWeaponCooldowns = {};
+    previousTurretCooldownById = new Map();
+    previousExplosionIds = new Set();
+    previousContactInvulnerableRemaining = 0;
   }
   restartButton?.addEventListener("click", restart);
 
@@ -98,9 +137,14 @@ export function initGame(root: ParentNode = document): () => void {
     const nextChargePhaseById = new Map<string, string>();
     for (const enemy of state.enemies) {
       const phase = enemy.chargePhase ?? "approaching";
+      const previousPhase = previousChargePhaseById.get(enemy.id);
       nextChargePhaseById.set(enemy.id, phase);
-      if (enemy.kind === "tank" && phase === "windup" && previousChargePhaseById.get(enemy.id) !== "windup") {
-        playTankChargeWarning();
+      if (enemy.kind !== "tank") continue;
+      // The Tank's entire charge-telegraph sound: one roar the instant it
+      // enters windup, never again when that same charge later launches
+      // into charging — a distinct, later phase this deliberately ignores.
+      if (phase === "windup" && previousPhase !== "windup") {
+        playTankWindupRoar();
       }
     }
     previousChargePhaseById = nextChargePhaseById;
@@ -112,6 +156,41 @@ export function initGame(root: ParentNode = document): () => void {
     const bossPhase = boss?.bossPhase ?? "idle";
     if (bossPhase === "specialWarning" && previousBossPhase !== "specialWarning") playBossRoar();
     previousBossPhase = bossPhase;
+
+    // Was alive last frame, isn't any more -> it died this tick (as opposed
+    // to "hasn't spawned yet", which also has no boss in `enemies` but was
+    // never alive to begin with).
+    const bossAlive = boss !== undefined;
+    if (previousBossAlive && !bossAlive) playSoundEffect("bossDeath");
+    previousBossAlive = bossAlive;
+
+    for (const weaponType of WEAPON_IDS) {
+      const previousCooldown = previousWeaponCooldowns[weaponType] ?? 0;
+      const currentCooldown = state.weaponCooldowns[weaponType] ?? 0;
+      if (currentCooldown > previousCooldown + 1e-6) playWeaponFireSound(weaponType);
+    }
+    previousWeaponCooldowns = { ...state.weaponCooldowns };
+
+    const currentTurretIds = new Set<string>();
+    for (const turret of state.placedEntities) {
+      currentTurretIds.add(turret.id);
+      const previousCooldown = previousTurretCooldownById.get(turret.id) ?? 0;
+      if (turret.attackCooldownRemaining > previousCooldown + 1e-6) playTurretFire();
+      previousTurretCooldownById.set(turret.id, turret.attackCooldownRemaining);
+    }
+    for (const id of previousTurretCooldownById.keys()) {
+      if (!currentTurretIds.has(id)) previousTurretCooldownById.delete(id);
+    }
+
+    for (const explosion of state.explosions) {
+      if (!previousExplosionIds.has(explosion.id)) playSoundEffect("rocketExplosion");
+    }
+    previousExplosionIds = new Set(state.explosions.map((e) => e.id));
+
+    if (state.player.contactInvulnerableRemaining > previousContactInvulnerableRemaining + 1e-6) {
+      playSoundEffect("playerHit");
+    }
+    previousContactInvulnerableRemaining = state.player.contactInvulnerableRemaining;
 
     // Dead zone is a fraction of the screen, so it has to be converted to
     // world units (divide by zoom) before the world-space follow math can

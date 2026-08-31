@@ -101,7 +101,13 @@ export const TANK_CHARGE_TRIGGER_RANGE = 220;
  * noticeable moment" a player needs to see it coming and get clear. */
 export const TANK_WINDUP_SECONDS = 0.9;
 export const TANK_CHARGE_SPEED = 260;
-export const TANK_CHARGE_DURATION_SECONDS = 0.6;
+/** Was 0.6 (a 156-unit dash at TANK_CHARGE_SPEED); shortened so the total
+ * charge distance reads and dodges more easily — the Tank commits to less
+ * ground, so stepping clear of its path matters again sooner instead of
+ * needing to stay clear for as long. Speed and windup are unchanged, so the
+ * charge still launches just as fast and telegraphs just as long — only how
+ * far it travels shrank. */
+export const TANK_CHARGE_DURATION_SECONDS = 0.35;
 /** Time after a charge finishes before the next one may begin. */
 export const TANK_CHARGE_COOLDOWN_SECONDS = 3.5;
 

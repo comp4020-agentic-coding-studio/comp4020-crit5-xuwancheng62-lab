@@ -22,6 +22,7 @@ import crateUrl from "../sprites/crate.png";
 import explosionUrl from "../sprites/explosion.png";
 import healthUrl from "../sprites/health.png";
 import katanaUrl from "../sprites/katana.png";
+import laserBeamUrl from "../sprites/laser_beam.png";
 import launcherUrl from "../sprites/launcher.png";
 import mapUrl from "../sprites/map.png";
 import playerHitUrl from "../sprites/player_hit.png";
@@ -142,6 +143,10 @@ export const SPRITES = {
   explosion: loadImage(explosionUrl),
   turretBase: loadImage(turretBaseUrl),
   turretHead: loadImage(turretHeadUrl),
+  // The Beam's fired line — a horizontal strip, bright origin on its left
+  // edge and a tapered point on its right (see canvas-renderer.ts's
+  // drawBeamSprite), stretched to length rather than scaled by aspect ratio.
+  laserBeam: loadImage(laserBeamUrl),
 } as const;
 
 export function ready(img: HTMLImageElement): boolean {

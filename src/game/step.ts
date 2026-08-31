@@ -299,7 +299,7 @@ export function step(
   // -- tick placed entities (turret attacks + expiry) -----------------------
   const tickedTurrets = placedEntities.map((turret) => tickTurret(turret, enemies, dtSeconds));
   for (const result of tickedTurrets) {
-    if (result.firedProjectile) pendingProjectileSpawns.push(result.firedProjectile);
+    if (result.firedProjectiles) pendingProjectileSpawns.push(...result.firedProjectiles);
   }
   placedEntities = tickedTurrets.map((r) => r.turret).filter((t) => isTurretAlive(t, elapsedSeconds));
 

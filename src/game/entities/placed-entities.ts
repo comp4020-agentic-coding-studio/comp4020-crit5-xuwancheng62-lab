@@ -36,7 +36,9 @@ export function spawnTurret(id: EntityId, level: number, pos: Vector2, elapsedSe
 
 export interface TurretTickResult {
   readonly turret: PlacedEntity;
-  readonly firedProjectile?: ProjectileSpawn;
+  /** One entry per enemy actually hit this attack — see
+   * TURRET_MAX_SIMULTANEOUS_TARGETS below for how many that can be. */
+  readonly firedProjectiles?: readonly ProjectileSpawn[];
 }
 
 const TURRET_PROJECTILE_SPEED = 200;
@@ -49,50 +51,67 @@ const TURRET_PROJECTILE_LIFESPAN = 1.5;
  * canvas-renderer.ts went from 22 to ~37, a ~1.7x increase) so the muzzle
  * point tracks the now-bigger barrel's actual visible tip. */
 const TURRET_MUZZLE_FORWARD_DISTANCE = 25;
+/** A turret now fires at more than one enemy per attack — up to this many of
+ * the nearest ones in range, simultaneously, rather than only the single
+ * nearest. Flat per-turret cap, not level-scaled: level already controls how
+ * many turrets get deployed at once (spawnTurret's caller in step.ts), so
+ * this is a separate, deliberately modest multiplier on top of that. */
+const TURRET_MAX_SIMULTANEOUS_TARGETS = 3;
 
-/** Pure: nearest enemy in range, or null if nothing to aim at. Shared by
- * tickTurret (the actual firing decision) and canvas-renderer.ts (the
- * turret's continuous visual aiming), so a turret's rendered barrel always
- * points exactly where it would actually fire — never a separately
- * maintained, potentially-out-of-sync direction. */
-export function turretAimDirection(turret: PlacedEntity, enemies: readonly EnemyState[]): Vector2 | null {
+/** Pure: the nearest `maxTargets` enemies in range, nearest first, or an
+ * empty array if nothing's in range. Shared by tickTurret (the actual
+ * firing decision) and turretAimDirection (the turret's single visual aim,
+ * always the nearest of these). */
+export function turretTargetsInRange(
+  turret: PlacedEntity,
+  enemies: readonly EnemyState[],
+  maxTargets: number,
+): EnemyState[] {
   const stats = turretStats(turret.level);
-  let nearest: EnemyState | null = null;
-  let nearestDistance = Infinity;
-  for (const enemy of enemies) {
-    const d = distance(turret.pos, enemy.pos);
-    if (d <= stats.range && d < nearestDistance) {
-      nearestDistance = d;
-      nearest = enemy;
-    }
-  }
+  return enemies
+    .map((enemy) => ({ enemy, d: distance(turret.pos, enemy.pos) }))
+    .filter(({ d }) => d <= stats.range)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, maxTargets)
+    .map(({ enemy }) => enemy);
+}
+
+/** Pure: direction to the single nearest enemy in range, or null if nothing
+ * to aim at. Used only for the turret's own visual barrel rotation
+ * (canvas-renderer.ts) — one barrel can only point one way, even though
+ * tickTurret below can now damage several targets in the same attack. */
+export function turretAimDirection(turret: PlacedEntity, enemies: readonly EnemyState[]): Vector2 | null {
+  const [nearest] = turretTargetsInRange(turret, enemies, 1);
   return nearest ? normalize(subtract(nearest.pos, turret.pos)) : null;
 }
 
-/** Pure: targets the nearest enemy in range, fires on its own cooldown. */
+/** Pure: targets up to TURRET_MAX_SIMULTANEOUS_TARGETS nearest enemies in
+ * range, firing one projectile at each, simultaneously, on its own
+ * cooldown. */
 export function tickTurret(
   turret: PlacedEntity,
   enemies: readonly EnemyState[],
   dt: number,
 ): TurretTickResult {
   const stats = turretStats(turret.level);
-  const direction = turretAimDirection(turret, enemies);
+  const targets = turretTargetsInRange(turret, enemies, TURRET_MAX_SIMULTANEOUS_TARGETS);
 
   const cooldownRemaining = Math.max(0, turret.attackCooldownRemaining - dt);
-  if (direction && cooldownRemaining <= 0) {
-    return {
-      turret: { ...turret, attackCooldownRemaining: stats.attackCooldownSeconds },
-      firedProjectile: {
+  if (targets.length > 0 && cooldownRemaining <= 0) {
+    const firedProjectiles = targets.map((target) => {
+      const direction = normalize(subtract(target.pos, turret.pos));
+      return {
         pos: add(turret.pos, scale(direction, TURRET_MUZZLE_FORWARD_DISTANCE)),
         vel: scale(direction, TURRET_PROJECTILE_SPEED),
         radius: TURRET_PROJECTILE_RADIUS,
         damage: stats.damage,
         lifespanRemaining: TURRET_PROJECTILE_LIFESPAN,
-        owner: "player",
+        owner: "player" as const,
         knockback: WEAPON_KNOCKBACK_DISTANCE,
-        sourceWeapon: "turret",
-      },
-    };
+        sourceWeapon: "turret" as const,
+      };
+    });
+    return { turret: { ...turret, attackCooldownRemaining: stats.attackCooldownSeconds }, firedProjectiles };
   }
   return { turret: { ...turret, attackCooldownRemaining: cooldownRemaining } };
 }
