@@ -17,7 +17,7 @@ export type TankChargePhase = "approaching" | "windup" | "charging";
  * EnemyState) behaves exactly like "idle". */
 export type BossPhase = "idle" | "normalWarning" | "specialWarning";
 
-/** One projectile of a Boss volley (the 8-shot fan or the 24-shot ring) —
+/** One projectile of a Boss volley (the 8-shot fan or the 28-shot ring) —
  * unlike FiredProjectileRequest below, each shot carries its own explicit
  * direction rather than a single shared "towards" point, since a fan/ring's
  * individual shots aim in different directions from one another. */
@@ -125,8 +125,8 @@ export const SHOOTER_FIRE_COOLDOWN_SECONDS = 2.4;
 
 /** Slower than Tank (TANK_SPEED) — a legless hovering mass, not a charger. */
 export const BOSS_SPEED = 22;
-/** Reinforced for the final encounter — 50% above the previous 900 HP. */
-export const BOSS_MAX_HP = 1350;
+/** Reinforced for the final encounter — 50% above the previous 1,350 HP. */
+export const BOSS_MAX_HP = 2025;
 /** Its own collision radius — deliberately bigger than Tank's (22) to match
  * its bulk, but unrelated to how large it's actually drawn (canvas-renderer.ts
  * renders it 1.6-1.8x Tank's sprite size, purely cosmetic — same
@@ -140,10 +140,12 @@ export const BOSS_ATTACK_WARNING_SECONDS = 0.6;
 /** Idle/approach time between the end of one attack and the start of the
  * next warning. Placeholder tuning pending playtesting, like every other
  * enemy's pacing constant in this file. */
-export const BOSS_ATTACK_COOLDOWN_SECONDS = 2.4;
-export const BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL = 3;
+export const BOSS_ATTACK_COOLDOWN_SECONDS = 2;
+/** Once reduced to half health, the Boss attacks twice as often. */
+export const BOSS_ENRAGED_ATTACK_COOLDOWN_SECONDS = 1;
+export const BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL = 2;
 export const BOSS_NORMAL_ATTACK_PROJECTILE_COUNT = 8;
-export const BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT = 24;
+export const BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT = 28;
 /** Total angular width the 8-shot fan spreads across, centered on the
  * locked aim direction — a "spread/fan aimed toward the player", not a full
  * ring (that's the special attack). */
@@ -185,7 +187,7 @@ function fanAngles(center: number, spread: number, count: number): number[] {
 }
 
 /** Evenly spaces `count` angles across a complete circle, starting at
- * `start` — the 24-shot ring. */
+ * `start` — the 28-shot ring. */
 function ringAngles(start: number, count: number): number[] {
   const angles: number[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -197,8 +199,8 @@ function ringAngles(start: number, count: number): number[] {
 /**
  * Idle (slowly approaching) -> warning (frozen, direction locked, telegraphed
  * for BOSS_ATTACK_WARNING_SECONDS) -> fires its volley the instant the
- * warning elapses -> back to idle. Every 4th attack (BOSS_NORMAL_ATTACKS_
- * BEFORE_SPECIAL completed normal ones) is a special 24-shot ring instead of
+ * warning elapses -> back to idle. After BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL
+ * completed normal attacks, the next attack is a special 28-shot ring instead of
  * a normal 8-shot fan; the normal-attack counter then resets. Never fires
  * both in the same tick — it's a strict either/or state machine, not two
  * independent timers.
@@ -206,9 +208,13 @@ function ringAngles(start: number, count: number): number[] {
 function stepBoss(self: EnemyState, playerPos: Vector2, dt: number): EnemyAiResult {
   const phase: BossPhase = self.bossPhase ?? "idle";
   const normalAttackCount = self.bossNormalAttackCount ?? 0;
+  const attackCooldown =
+    self.hp <= self.maxHp * 0.5 ? BOSS_ENRAGED_ATTACK_COOLDOWN_SECONDS : BOSS_ATTACK_COOLDOWN_SECONDS;
 
   if (phase === "idle") {
-    const cooldownRemaining = self.attackCooldownRemaining - dt;
+    // Cap an in-progress normal cooldown as soon as enrage begins, so the
+    // faster cadence takes effect immediately rather than one attack later.
+    const cooldownRemaining = Math.min(self.attackCooldownRemaining, attackCooldown) - dt;
     if (cooldownRemaining <= 0) {
       // Locked NOW, at the exact instant the warning begins — never
       // re-aimed while it plays out, which is what makes it dodgeable.
@@ -254,7 +260,7 @@ function stepBoss(self: EnemyState, playerPos: Vector2, dt: number): EnemyAiResu
     return {
       movement: { x: 0, y: 0 },
       firedProjectiles: angles.map((angle) => ({ from: self.pos, direction: fromAngle(angle) })),
-      nextAttackCooldownRemaining: BOSS_ATTACK_COOLDOWN_SECONDS,
+      nextAttackCooldownRemaining: attackCooldown,
       nextBossPhase: "idle",
       nextBossNormalAttackCount: normalAttackCount + 1,
     };
@@ -264,7 +270,7 @@ function stepBoss(self: EnemyState, playerPos: Vector2, dt: number): EnemyAiResu
   return {
     movement: { x: 0, y: 0 },
     firedProjectiles: angles.map((angle) => ({ from: self.pos, direction: fromAngle(angle) })),
-    nextAttackCooldownRemaining: BOSS_ATTACK_COOLDOWN_SECONDS,
+    nextAttackCooldownRemaining: attackCooldown,
     nextBossPhase: "idle",
     nextBossNormalAttackCount: 0, // reset after every special attack
   };
@@ -451,14 +457,23 @@ export function findNearestEnemy(pos: Vector2, enemies: readonly EnemyState[]): 
   return nearest;
 }
 
-export function spawnEnemy(id: string, kind: EnemyKind, pos: Vector2): EnemyState {
+export const LATE_GAME_HEALTH_BOOST_START_SECONDS = 60;
+export const LATE_GAME_HEALTH_MULTIPLIER = 1.2;
+
+/** Only newly spawned Tanks and Shooters are reinforced after 60 seconds;
+ * existing enemies keep their current/max HP, so the transition never heals
+ * anything already on the field. */
+export function spawnEnemy(id: string, kind: EnemyKind, pos: Vector2, elapsedSeconds = 0): EnemyState {
+  const receivesLateGameBoost =
+    elapsedSeconds >= LATE_GAME_HEALTH_BOOST_START_SECONDS && (kind === "tank" || kind === "shooter");
+  const maxHp = maxHpFor(kind) * (receivesLateGameBoost ? LATE_GAME_HEALTH_MULTIPLIER : 1);
   return {
     id,
     kind,
     pos,
     radius: radiusFor(kind),
-    hp: maxHpFor(kind),
-    maxHp: maxHpFor(kind),
+    hp: maxHp,
+    maxHp,
     attackCooldownRemaining: 0,
   };
 }

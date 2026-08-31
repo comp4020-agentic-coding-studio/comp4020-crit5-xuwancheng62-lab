@@ -6,6 +6,7 @@
 // abstract. Level is always 1..MAX_LEVEL from loadout.ts.
 
 import { statAt } from "../stat-curve";
+import { MAX_LEVEL } from "./loadout";
 
 /** Shared knockback distance for every ordinary weapon hit except Beam. */
 export const WEAPON_KNOCKBACK_DISTANCE = 50;
@@ -111,7 +112,8 @@ export interface NukeStats {
 export function nukeStats(level: number): NukeStats {
   return {
     damage: statAt(level, 20, 5),
-    cooldownSeconds: statAt(level, 4, -0.275),
+    // Linear 6s -> 2s curve across all eight weapon levels.
+    cooldownSeconds: statAt(level, 6, (2 - 6) / (MAX_LEVEL - 1)),
     projectileSpeed: 110,
     projectileRadius: 8,
     explosionRadius: statAt(level, 120, 10),

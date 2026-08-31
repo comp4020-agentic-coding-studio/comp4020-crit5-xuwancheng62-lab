@@ -91,7 +91,7 @@ const ENEMY_PROJECTILE_LIFESPAN = 2.5;
 const BOSS_SPAWN_AT_SECONDS = 80;
 /** "Slightly smaller and slower than normal Shooter projectiles"
  * (ENEMY_PROJECTILE_RADIUS/SPEED above) — used for both the 8-shot fan and
- * the 24-shot ring; the brief only asks the ring to be independently
+ * the 28-shot ring; the brief only asks the ring to be independently
  * "dodgeable", which the same slow/small orb already satisfies. */
 const BOSS_PROJECTILE_SPEED = 130;
 const BOSS_PROJECTILE_RADIUS = 4;
@@ -180,7 +180,7 @@ export function step(
   );
   rng = spawnResult.nextRng;
   const spawnedEnemies: EnemyState[] = spawnResult.spawns.map((spawn) =>
-    spawnEnemy(allocateId("e"), spawn.kind, spawn.pos),
+    spawnEnemy(allocateId("e"), spawn.kind, spawn.pos, elapsedSeconds),
   );
 
   // -- boss: spawns exactly once, at BOSS_SPAWN_AT_SECONDS ------------------
@@ -210,7 +210,7 @@ export function step(
       });
     }
     if (result.firedProjectiles) {
-      // A whole volley (the 8-shot fan or the 24-shot ring) fired the same
+      // A whole volley (the 8-shot fan or the 28-shot ring) fired the same
       // tick — each shot already carries its own direction, unlike the
       // single-target firedProjectile above.
       for (const request of result.firedProjectiles) {

@@ -47,8 +47,13 @@ describe("new ranged weapon tuning", () => {
     expect(smgStats(1).cooldownSeconds).toBeLessThan(nukeStats(1).cooldownSeconds);
   });
 
-  it("Nuke's base cooldown is four seconds", () => {
-    expect(nukeStats(1).cooldownSeconds).toBe(4);
+  it("scales Nuke cooldown linearly from 6 seconds to 2 seconds", () => {
+    for (let level = 1; level <= MAX_LEVEL; level += 1) {
+      const expected = 6 - ((level - 1) * 4) / (MAX_LEVEL - 1);
+      expect(nukeStats(level).cooldownSeconds).toBeCloseTo(expected);
+    }
+    expect(nukeStats(1).cooldownSeconds).toBe(6);
+    expect(nukeStats(MAX_LEVEL).cooldownSeconds).toBe(2);
   });
 
   it("Nuke has a large, high-damage splash", () => {

@@ -34,5 +34,5 @@ export const XP_ORB_VALUE = 3;
 /** Chance an enemy kill also drops a weapon, on top of its guaranteed XP. */
 export const WEAPON_DROP_CHANCE = 0.18;
 /** Independent chance for a small healing drop. */
-export const HEALTH_DROP_CHANCE = 0.025;
+export const HEALTH_DROP_CHANCE = 0.0125;
 export const HEALTH_RESTORE_FRACTION = 0.2;

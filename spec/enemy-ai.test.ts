@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   BOSS_ATTACK_COOLDOWN_SECONDS,
+  BOSS_ENRAGED_ATTACK_COOLDOWN_SECONDS,
   BOSS_ATTACK_WARNING_SECONDS,
   BOSS_NORMAL_ATTACK_FAN_RADIANS,
   BOSS_NORMAL_ATTACK_PROJECTILE_COUNT,
   BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL,
   BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT,
   BOSS_SPEED,
+  LATE_GAME_HEALTH_BOOST_START_SECONDS,
+  LATE_GAME_HEALTH_MULTIPLIER,
   RUSHER_SPEED,
   SHOOTER_DISTANCE_TOLERANCE,
   SHOOTER_FIRE_COOLDOWN_SECONDS,
@@ -19,6 +22,7 @@ import {
   TANK_SPEED,
   TANK_WINDUP_SECONDS,
   type EnemyState,
+  spawnEnemy,
   stepEnemy,
 } from "../src/game/entities/enemies";
 import { angleOf, length, normalize, subtract } from "../src/game/vector";
@@ -185,8 +189,8 @@ describe("stepShooter", () => {
 });
 
 describe("stepBoss: idle approach", () => {
-  it("uses the faster 2.4-second attack cooldown", () => {
-    expect(BOSS_ATTACK_COOLDOWN_SECONDS).toBe(2.4);
+  it("uses a 2-second attack cooldown before enrage", () => {
+    expect(BOSS_ATTACK_COOLDOWN_SECONDS).toBe(2);
   });
   function bossAt(pos: EnemyState["pos"], overrides: Partial<EnemyState> = {}): EnemyState {
     return { ...enemyAt("boss", pos), bossPhase: "idle", bossNormalAttackCount: 0, ...overrides };
@@ -207,6 +211,16 @@ describe("stepBoss: idle approach", () => {
     const result = stepEnemy(self, PLAYER_POS, 1 / 60);
     expect(result.nextBossPhase).toBe("idle");
     expect(result.firedProjectiles).toBeUndefined();
+  });
+
+  it("immediately caps the remaining cooldown at 1 second after dropping to half health", () => {
+    const self = bossAt(
+      { x: 0, y: 300 },
+      { hp: 5, maxHp: 10, attackCooldownRemaining: BOSS_ATTACK_COOLDOWN_SECONDS },
+    );
+    const result = stepEnemy(self, PLAYER_POS, 0.1);
+    expect(BOSS_ENRAGED_ATTACK_COOLDOWN_SECONDS).toBe(1);
+    expect(result.nextAttackCooldownRemaining).toBeCloseTo(BOSS_ENRAGED_ATTACK_COOLDOWN_SECONDS - 0.1);
   });
 });
 
@@ -281,13 +295,18 @@ describe("stepBoss: normal attack (8-shot fan)", () => {
   });
 });
 
-describe("stepBoss: every 3rd normal attack is replaced by a special 24-shot ring", () => {
+describe("stepBoss: every 2 normal attacks are followed by a special 28-shot ring", () => {
   function bossAt(pos: EnemyState["pos"], overrides: Partial<EnemyState> = {}): EnemyState {
     return { ...enemyAt("boss", pos), bossPhase: "idle", bossNormalAttackCount: 0, ...overrides };
   }
 
-  it("still warms up normally for the 1st, 2nd and 3rd attacks", () => {
-    for (const count of [0, 1, 2]) {
+  it("uses the requested special cadence and ring size", () => {
+    expect(BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL).toBe(2);
+    expect(BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT).toBe(28);
+  });
+
+  it("still warms up normally for the 1st and 2nd attacks", () => {
+    for (const count of [0, 1]) {
       const self = bossAt({ x: -100, y: 0 }, { attackCooldownRemaining: 0, bossNormalAttackCount: count });
       const result = stepEnemy(self, PLAYER_POS, 1 / 60);
       expect(result.nextBossPhase).toBe("normalWarning");
@@ -303,10 +322,10 @@ describe("stepBoss: every 3rd normal attack is replaced by a special 24-shot rin
     expect(result.nextBossPhase).toBe("specialWarning");
   });
 
-  it("fires exactly 24 projectiles, evenly spaced across the full ring, once the special warning elapses", () => {
+  it("fires exactly 28 projectiles, evenly spaced across the full ring, once the special warning elapses", () => {
     const self = bossAt(
       { x: 0, y: 0 },
-      { bossPhase: "specialWarning", bossPhaseTimer: 1 / 60, bossLockedAimAngle: 0, bossNormalAttackCount: 3 },
+      { bossPhase: "specialWarning", bossPhaseTimer: 1 / 60, bossLockedAimAngle: 0, bossNormalAttackCount: 2 },
     );
     const result = stepEnemy(self, { x: 1000, y: 0 }, 1 / 60);
     expect(result.firedProjectiles).toHaveLength(BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT);
@@ -321,16 +340,50 @@ describe("stepBoss: every 3rd normal attack is replaced by a special 24-shot rin
   it("resets the normal-attack counter to 0 after the special attack fires", () => {
     const self = bossAt(
       { x: 0, y: 0 },
-      { bossPhase: "specialWarning", bossPhaseTimer: 1 / 60, bossLockedAimAngle: 0, bossNormalAttackCount: 3 },
+      { bossPhase: "specialWarning", bossPhaseTimer: 1 / 60, bossLockedAimAngle: 0, bossNormalAttackCount: 2 },
     );
     const result = stepEnemy(self, { x: 1000, y: 0 }, 1 / 60);
     expect(result.nextBossNormalAttackCount).toBe(0);
     expect(result.nextBossPhase).toBe("idle");
   });
 
+  it("resets to the 1-second cooldown when an enraged special fires", () => {
+    const self = bossAt(
+      { x: 0, y: 0 },
+      {
+        hp: 5,
+        maxHp: 10,
+        bossPhase: "specialWarning",
+        bossPhaseTimer: 1 / 60,
+        bossLockedAimAngle: 0,
+        bossNormalAttackCount: BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL,
+      },
+    );
+    const result = stepEnemy(self, PLAYER_POS, 1 / 60);
+    expect(result.nextAttackCooldownRemaining).toBe(BOSS_ENRAGED_ATTACK_COOLDOWN_SECONDS);
+  });
+
   it("goes back to a normal 8-shot attack for the next one, after a special reset the counter", () => {
     const self = bossAt({ x: -100, y: 0 }, { attackCooldownRemaining: 0, bossNormalAttackCount: 0 });
     const result = stepEnemy(self, PLAYER_POS, 1 / 60);
     expect(result.nextBossPhase).toBe("normalWarning");
+  });
+});
+
+describe("late-game enemy health", () => {
+  it("boosts only newly spawned Tanks and Shooters from 60 seconds onward", () => {
+    const before = LATE_GAME_HEALTH_BOOST_START_SECONDS - 0.001;
+    const atThreshold = LATE_GAME_HEALTH_BOOST_START_SECONDS;
+
+    for (const kind of ["tank", "shooter"] as const) {
+      const early = spawnEnemy(`early-${kind}`, kind, PLAYER_POS, before);
+      const late = spawnEnemy(`late-${kind}`, kind, PLAYER_POS, atThreshold);
+      expect(late.maxHp).toBeCloseTo(early.maxHp * LATE_GAME_HEALTH_MULTIPLIER);
+      expect(late.hp).toBe(late.maxHp);
+    }
+
+    const earlyRusher = spawnEnemy("early-rusher", "rusher", PLAYER_POS, before);
+    const lateRusher = spawnEnemy("late-rusher", "rusher", PLAYER_POS, atThreshold);
+    expect(lateRusher.maxHp).toBe(earlyRusher.maxHp);
   });
 });

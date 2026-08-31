@@ -8,7 +8,7 @@ describe("PICKUP_COLLECT_RADIUS", () => {
 });
 
 describe("HEALTH_DROP_CHANCE", () => {
-  it("is half of the previous five-percent drop rate", () => {
-    expect(HEALTH_DROP_CHANCE).toBe(0.025);
+  it("is half of the previous 2.5-percent drop rate", () => {
+    expect(HEALTH_DROP_CHANCE).toBe(0.0125);
   });
 });

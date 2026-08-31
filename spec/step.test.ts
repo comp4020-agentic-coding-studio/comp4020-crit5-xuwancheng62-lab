@@ -551,9 +551,9 @@ describe("step: Boss integration", () => {
     expect(bosses[0].maxHp).toBe(BOSS_MAX_HP);
   });
 
-  it("gives the reinforced Boss 1,350 HP", () => {
-    expect(BOSS_MAX_HP).toBe(1350);
-    expect(BOSS_MAX_HP).toBeGreaterThan(TANK_MAX_HP * 30);
+  it("gives the reinforced Boss 2,025 HP", () => {
+    expect(BOSS_MAX_HP).toBe(2025);
+    expect(BOSS_MAX_HP).toBeGreaterThan(TANK_MAX_HP * 50);
   });
 
   it("never spawns a second Boss later in the same run, even across many ticks past 80s", () => {
