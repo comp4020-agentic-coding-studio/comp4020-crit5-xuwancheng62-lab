@@ -309,7 +309,7 @@ describe("step: weapon hits knock enemies back, Beam excepted", () => {
     expect(target).toBeDefined();
     // Tank's own AI closes at ~38 units/s (~0.6 units this one frame); a
     // move far beyond that can only be the shot's knockback.
-    expect(distance(target!.pos, before.enemies[0].pos)).toBeGreaterThan(20);
+    expect(distance(target!.pos, before.enemies[0].pos)).toBeGreaterThan(10);
   });
 
   it("Beam deals its hit but never knocks the target back", () => {
@@ -345,20 +345,20 @@ describe("step: nuclear launcher", () => {
         pos: { x: 0, y: 0 },
         vel: { x: 0, y: 0 },
         radius: 8,
-        damage: 20,
+        damage: 15,
         lifespanRemaining: 0.001,
         onImpact: "explode",
         explodeOnExpiry: true,
         explodeRadius: 120,
-        splashDamage: 90,
+        splashDamage: 55,
         owner: "player",
-        knockback: 120,
+        knockback: 30,
         sourceWeapon: "nuke",
       }],
     };
     const after = step(armed, NO_MOVEMENT, DT);
     expect(after.projectiles.find((p) => p.id === "nuke-projectile")).toBeUndefined();
-    expect(after.enemies.find((enemy) => enemy.id === "target")!.hp).toBe(110);
+    expect(after.enemies.find((enemy) => enemy.id === "target")!.hp).toBe(145);
     expect(after.explosions.some((effect) => effect.sourceWeapon === "nuke")).toBe(true);
   });
 });

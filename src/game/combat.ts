@@ -10,9 +10,7 @@ import type { Vector2 } from "./types";
 import { normalize } from "./vector";
 
 /** How much of a would-be knockback actually applies to this enemy: 0 for a
- * charging Tank (hasSuperArmor — full immunity, unchanged from before), a
- * small fraction for the Boss ("strongly resist", not immune — see
- * BOSS_KNOCKBACK_RESISTANCE), 1 (unaffected) for everyone else. */
+ * charging Tank and the Boss (both fully immune), 1 for everyone else. */
 function knockbackMultiplierFor(enemy: EnemyState): number {
   if (hasSuperArmor(enemy)) return 0;
   if (enemy.kind === "boss") return BOSS_KNOCKBACK_RESISTANCE;

@@ -40,6 +40,11 @@ describe("bladeStats: dedicated melee knockback", () => {
   it("has its own dedicated knockback, not the shared WEAPON_KNOCKBACK_DISTANCE other weapons use", () => {
     expect(bladeStats(1).knockback).toBeGreaterThan(WEAPON_KNOCKBACK_DISTANCE);
   });
+
+  it("uses the reduced knockback tuning", () => {
+    expect(WEAPON_KNOCKBACK_DISTANCE).toBe(15);
+    expect(bladeStats(1).knockback).toBe(25);
+  });
 });
 
 describe("new ranged weapon tuning", () => {
@@ -59,5 +64,10 @@ describe("new ranged weapon tuning", () => {
   it("Nuke has a large, high-damage splash", () => {
     expect(nukeStats(1).explosionRadius).toBeGreaterThan(100);
     expect(nukeStats(1).splashDamage).toBeGreaterThan(50);
+  });
+
+  it("uses the reduced Nuke damage and knockback curve", () => {
+    expect(nukeStats(1)).toMatchObject({ damage: 15, splashDamage: 55, knockback: 30 });
+    expect(nukeStats(MAX_LEVEL)).toMatchObject({ damage: 36, splashDamage: 125, knockback: 30 });
   });
 });

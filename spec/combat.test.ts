@@ -110,30 +110,20 @@ describe("super armor: a charging Tank still takes damage but never gets displac
   });
 });
 
-describe("Boss knockback resistance: strongly resisted, not immune", () => {
-  it("applyAreaDamage: takes full damage but is displaced far less than a normal enemy under the same hit", () => {
+describe("Boss knockback immunity", () => {
+  it("applyAreaDamage: takes full damage but is not displaced", () => {
     const boss = bossAt(10, 0);
-    const rusher = enemyAt(10, 0);
     const bossResult = applyAreaDamage([boss], { x: 0, y: 0 }, 30, 5, 60);
-    const rusherResult = applyAreaDamage([rusher], { x: 0, y: 0 }, 30, 5, 60);
-    expect(bossResult.survivors[0].hp).toBe(BOSS_MAX_HP - 5); // damage unaffected
-    const bossDisplacement = bossResult.survivors[0].pos.x - 10;
-    const rusherDisplacement = rusherResult.survivors[0].pos.x - 10;
-    expect(bossDisplacement).toBeGreaterThan(0); // not fully immune...
-    expect(bossDisplacement).toBeLessThan(rusherDisplacement * 0.2); // ...but strongly resisted
+    expect(bossResult.survivors[0].hp).toBe(BOSS_MAX_HP - 5);
+    expect(bossResult.survivors[0].pos).toEqual({ x: 10, y: 0 });
   });
 
-  it("applyPointDamage: takes full damage but is displaced far less than a normal enemy under the same hit", () => {
+  it("applyPointDamage: takes full damage but is not displaced", () => {
     const boss = bossAt(100, 0);
-    const rusher = enemyAt(100, 0);
     const knockback = { direction: { x: 1, y: 0 }, distance: 40 };
     const bossResult = applyPointDamage(boss, 5, knockback);
-    const rusherResult = applyPointDamage(rusher, 5, knockback);
     expect(bossResult.hp).toBe(BOSS_MAX_HP - 5);
-    const bossDisplacement = bossResult.pos.x - 100;
-    const rusherDisplacement = rusherResult.pos.x - 100;
-    expect(bossDisplacement).toBeGreaterThan(0);
-    expect(bossDisplacement).toBeLessThan(rusherDisplacement * 0.2);
+    expect(bossResult.pos).toEqual({ x: 100, y: 0 });
   });
 
   it("a killing hit on the Boss still applies, resistance or not", () => {

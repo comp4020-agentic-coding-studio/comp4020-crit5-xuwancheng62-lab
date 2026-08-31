@@ -9,7 +9,7 @@ import { statAt } from "../stat-curve";
 import { MAX_LEVEL } from "./loadout";
 
 /** Shared knockback distance for every ordinary weapon hit except Beam. */
-export const WEAPON_KNOCKBACK_DISTANCE = 50;
+export const WEAPON_KNOCKBACK_DISTANCE = 15;
 
 export interface BladeStats {
   damage: number;
@@ -23,7 +23,7 @@ export function bladeStats(level: number): BladeStats {
     damage: statAt(level, 11, 3),
     cooldownSeconds: statAt(level, 0.6, -0.08),
     ringRadius: statAt(level, 65, 6),
-    knockback: 90,
+    knockback: 25,
   };
 }
 
@@ -111,14 +111,14 @@ export interface NukeStats {
 }
 export function nukeStats(level: number): NukeStats {
   return {
-    damage: statAt(level, 20, 5),
+    damage: statAt(level, 15, 3),
     // Linear 6s -> 2s curve across all eight weapon levels.
     cooldownSeconds: statAt(level, 6, (2 - 6) / (MAX_LEVEL - 1)),
     projectileSpeed: 110,
     projectileRadius: 8,
     explosionRadius: statAt(level, 120, 10),
-    splashDamage: statAt(level, 90, 18),
-    knockback: 120,
+    splashDamage: statAt(level, 55, 10),
+    knockback: 30,
   };
 }
 

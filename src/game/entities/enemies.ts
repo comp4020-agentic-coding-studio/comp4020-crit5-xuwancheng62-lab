@@ -150,11 +150,8 @@ export const BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT = 28;
  * locked aim direction — a "spread/fan aimed toward the player", not a full
  * ring (that's the special attack). */
 export const BOSS_NORMAL_ATTACK_FAN_RADIANS = Math.PI / 4;
-/** "Strongly resist" per the brief, not fully immune like a charging Tank's
- * super armor (hasSuperArmor below) — a full-strength hit still nudges it,
- * just barely, so it stays knockable in principle while reading as
- * essentially anchored in practice. */
-export const BOSS_KNOCKBACK_RESISTANCE = 0.08;
+/** Boss takes damage normally but is completely immune to displacement. */
+export const BOSS_KNOCKBACK_RESISTANCE = 0;
 
 export function spawnBoss(id: string, pos: Vector2): EnemyState {
   return {
