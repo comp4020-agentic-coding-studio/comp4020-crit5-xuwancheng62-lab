@@ -183,7 +183,9 @@ export function initGame(root: ParentNode = document): () => void {
     }
 
     for (const explosion of state.explosions) {
-      if (!previousExplosionIds.has(explosion.id)) playSoundEffect("rocketExplosion");
+      if (!previousExplosionIds.has(explosion.id)) {
+        playSoundEffect(explosion.sourceWeapon === "nuke" ? "nukeExplosion" : "rocketExplosion");
+      }
     }
     previousExplosionIds = new Set(state.explosions.map((e) => e.id));
 

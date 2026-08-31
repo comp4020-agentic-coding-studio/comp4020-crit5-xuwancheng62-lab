@@ -3,6 +3,7 @@
 
 import { RUN_LENGTH_SECONDS } from "../game/spawn/spawn-tuning";
 import type { GameState } from "../game/state";
+import { MAX_SLOTS } from "../game/weapons/loadout";
 
 export interface HudElements {
   readonly healthFill: HTMLElement;
@@ -23,7 +24,7 @@ export function queryHud(root: ParentNode): HudElements | null {
   const endMessage = root.querySelector<HTMLElement>('[data-testid="end-message"]');
   const bossHealthBar = root.querySelector<HTMLElement>('[data-testid="boss-health-bar"]');
   const bossHealthFill = root.querySelector<HTMLElement>('[data-testid="boss-health-fill"]');
-  const loadoutSlots = [0, 1, 2].map((i) =>
+  const loadoutSlots = Array.from({ length: MAX_SLOTS }, (_, i) =>
     root.querySelector<HTMLElement>(`[data-testid="loadout-slot-${i}"]`),
   );
   if (

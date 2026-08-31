@@ -20,7 +20,7 @@ import { statsAtCharacterLevel } from "../game/leveling/player-stats";
 import type { Pickup } from "../game/entities/pickups";
 import { turretAimDirection, type PlacedEntity } from "../game/entities/placed-entities";
 import type { Projectile } from "../game/entities/projectiles";
-import { EXPLOSION_EFFECT_DURATION_SECONDS } from "../game/step";
+import { explosionEffectDurationSeconds } from "../game/step";
 import type { ExplosionEffect, GameState } from "../game/state";
 import { add, angleOf, fromAngle, subtract } from "../game/vector";
 import type { Vector2 } from "../game/types";
@@ -31,10 +31,10 @@ import { PLAYER_SHAPE, colorForWeapon, shapeFor, type BlobShape } from "./shapes
 import {
   beamStats,
   bladeStats,
-  fistBaseStats,
-  pistolStats,
+  nukeStats,
   rocketStats,
   scattergunStats,
+  smgStats,
 } from "../game/weapons/weapon-stats";
 import { orbitIndices, weaponOrbitPosition } from "../game/weapons/weapon-orbit";
 import type { WeaponId } from "../game/weapons/weapon-types";
@@ -77,19 +77,20 @@ const facingTrackers = new Map<string, FacingState>();
  * cannon itself reads clearly as "this is the turret weapon". */
 const WEAPON_ICON_SPRITES: Partial<Record<WeaponId, HTMLImageElement>> = {
   blade: SPRITES.blade,
-  pistol: SPRITES.pistol,
+  smg: SPRITES.smg,
   scattergun: SPRITES.scattergun,
   beam: SPRITES.beam,
   rocket: SPRITES.rocket,
   turret: SPRITES.turretHead,
+  nuke: SPRITES.nuke,
 };
 
 function cooldownSecondsFor(type: WeaponId, level: number): number {
   switch (type) {
     case "blade":
       return bladeStats(level).cooldownSeconds;
-    case "pistol":
-      return pistolStats(level).cooldownSeconds;
+    case "smg":
+      return smgStats(level).cooldownSeconds;
     case "scattergun":
       return scattergunStats(level).cooldownSeconds;
     case "beam":
@@ -98,6 +99,8 @@ function cooldownSecondsFor(type: WeaponId, level: number): number {
       return rocketStats(level).cooldownSeconds;
     case "turret":
       return Number.POSITIVE_INFINITY;
+    case "nuke":
+      return nukeStats(level).cooldownSeconds;
   }
 }
 
@@ -105,7 +108,7 @@ function cooldownSecondsFor(type: WeaponId, level: number): number {
  * value this frame — read from state alone, no separate transient-effect
  * channel needed. `full` MUST already have the character's attack-speed
  * multiplier applied, exactly like the value step.ts actually stores in
- * weaponCooldowns/fistCooldownRemaining — comparing against the raw,
+ * weaponCooldowns — comparing against the raw,
  * unscaled stat here silently stopped the flash from ever firing (Beam
  * included) once attack speed climbed past ~1.09x, because the real
  * `remaining` was always smaller than that unscaled 92% threshold. */
@@ -264,10 +267,9 @@ function spriteScaleFor(kind: EnemyKind): number {
  * Tank's own current rendered diameter (shape.radiusX * spriteScaleFor
  * ("tank")) rather than through Boss's own shape.radiusX, so the
  * relationship holds even if Tank's own numbers change later. Bumped from
- * the original 1.7x to 2.6x for a more imposing presence — purely visual,
- * same as every other size-only pass in this file: BOSS_RADIUS (the actual
- * collision size, in entities/enemies.ts) is untouched. */
-const BOSS_RENDER_SCALE_OVER_TANK = 2.6;
+ * the original 1.7x to 2.6x for a more imposing presence, then another 20%
+ * for the reinforced final encounter. */
+const BOSS_RENDER_SCALE_OVER_TANK = 3.12;
 /** "Slightly slower" than every other enemy's WALK_FRAME_SECONDS cadence —
  * a legless hover reads as heavier/slower than a walk cycle. */
 const BOSS_ANIMATION_FRAME_SECONDS = WALK_FRAME_SECONDS * 1.5;
@@ -447,23 +449,26 @@ function drawPlayer(
 // collision math elsewhere still uses the real, smaller radius. Separate
 // per-weapon scales (rather than one shared constant) because a bullet and
 // a cannonball need very different amounts of that generous sizing:
-// Pistol/Scattergun's bullet.png was reading oversized relative to the
+// SMG/Scattergun's bullet.png was reading oversized relative to the
 // small-caliber shots it represents, while the turret's cannonball read as
 // too small next to its now-bigger barrel (see TURRET_HEAD_DIAMETER above).
-const PISTOL_SCATTERGUN_PROJECTILE_SCALE = 2.3; // was the shared 4.2 -> ~55%
+const SMG_SCATTERGUN_PROJECTILE_SCALE = 2.3; // small-caliber rounds
 const TURRET_CANNONBALL_PROJECTILE_SCALE = 8.0; // was the shared 4.2 -> ~1.9x
 const ROCKET_PROJECTILE_SCALE = 4.2; // unchanged
+const NUKE_PROJECTILE_SCALE = 5.5;
 const DEFAULT_PROJECTILE_SCALE = 4.2; // unchanged — enemy fire and any untagged projectile
 
 function projectileVisualScale(sourceWeapon: WeaponId | undefined): number {
   switch (sourceWeapon) {
-    case "pistol":
+    case "smg":
     case "scattergun":
-      return PISTOL_SCATTERGUN_PROJECTILE_SCALE;
+      return SMG_SCATTERGUN_PROJECTILE_SCALE;
     case "turret":
       return TURRET_CANNONBALL_PROJECTILE_SCALE;
     case "rocket":
       return ROCKET_PROJECTILE_SCALE;
+    case "nuke":
+      return NUKE_PROJECTILE_SCALE;
     default:
       return DEFAULT_PROJECTILE_SCALE;
   }
@@ -531,10 +536,11 @@ function drawBeamSprite(
  * art it uses. Absent for enemy fire (untagged), which keeps the original
  * generic look. */
 const PROJECTILE_SPRITES: Partial<Record<WeaponId, HTMLImageElement>> = {
-  pistol: SPRITES.bulletProjectile,
+  smg: SPRITES.bulletProjectile,
   scattergun: SPRITES.bulletProjectile,
   rocket: SPRITES.rocketProjectile,
   turret: SPRITES.cannonballProjectile,
+  nuke: SPRITES.nukeProjectile,
 };
 
 function drawProjectile(ctx: CanvasRenderingContext2D, camera: Camera, projectile: Projectile): void {
@@ -567,10 +573,10 @@ function drawProjectile(ctx: CanvasRenderingContext2D, camera: Camera, projectil
  * never the other way round) and faded out over its short lifetime; skipped
  * entirely if the sprite hasn't loaded rather than drawing any placeholder. */
 function drawExplosion(ctx: CanvasRenderingContext2D, camera: Camera, effect: ExplosionEffect, elapsedSeconds: number): void {
-  const img = SPRITES.explosion;
+  const img = effect.sourceWeapon === "nuke" ? SPRITES.nukeExplosion : SPRITES.explosion;
   if (!ready(img)) return;
   const age = elapsedSeconds - effect.startedAt;
-  const progress = Math.min(1, Math.max(0, age / EXPLOSION_EFFECT_DURATION_SECONDS));
+  const progress = Math.min(1, Math.max(0, age / explosionEffectDurationSeconds(effect)));
   const screenPos = worldToScreen(camera, effect.pos);
   const diameter = worldLengthToScreen(camera, effect.radius * 2);
   ctx.save();
@@ -581,6 +587,7 @@ function drawExplosion(ctx: CanvasRenderingContext2D, camera: Camera, effect: Ex
 
 const PICKUP_CRATE_DIAMETER = 38;
 const PICKUP_ICON_DIAMETER = 23;
+const HEALTH_PICKUP_DIAMETER = 24;
 
 function drawPickup(ctx: CanvasRenderingContext2D, camera: Camera, pickup: Pickup, elapsedSeconds: number): void {
   const screenPos = worldToScreen(camera, pickup.pos);
@@ -597,6 +604,15 @@ function drawPickup(ctx: CanvasRenderingContext2D, camera: Camera, pickup: Picku
   ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
   ctx.fillStyle = glow;
   ctx.fill();
+
+  if (pickup.kind === "health") {
+    if (drawSpriteCentered(ctx, screenPos, SPRITES.health, worldLengthToScreen(camera, HEALTH_PICKUP_DIAMETER))) return;
+    const size = worldLengthToScreen(camera, 8);
+    ctx.fillStyle = "#ff4b4b";
+    ctx.fillRect(screenPos.x - size / 3, screenPos.y - size, (size * 2) / 3, size * 2);
+    ctx.fillRect(screenPos.x - size, screenPos.y - size / 3, size * 2, (size * 2) / 3);
+    return;
+  }
 
   const drewCrate = drawSpriteCentered(ctx, screenPos, SPRITES.crate, worldLengthToScreen(camera, PICKUP_CRATE_DIAMETER));
   const icon = WEAPON_ICON_SPRITES[pickup.weaponType];
@@ -705,20 +721,11 @@ function drawTurret(ctx: CanvasRenderingContext2D, camera: Camera, turret: Place
 function drawWeaponFlash(
   ctx: CanvasRenderingContext2D,
   camera: Camera,
-  playerScreenPos: { x: number; y: number },
   state: GameState,
 ): void {
   // Must match step.ts's own division exactly, or "just fired" drifts out
   // of sync with reality as the character levels up attack speed.
   const attackSpeedMultiplier = statsAtCharacterLevel(state.xp.level).attackSpeedMultiplier;
-
-  if (justFired(state.fistCooldownRemaining, fistBaseStats().cooldownSeconds / attackSpeedMultiplier)) {
-    ctx.beginPath();
-    ctx.arc(playerScreenPos.x, playerScreenPos.y, worldLengthToScreen(camera, fistBaseStats().range), 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.5)";
-    ctx.lineWidth = worldLengthToScreen(camera, 2);
-    ctx.stroke();
-  }
 
   for (const slot of state.loadout.slots) {
     const remaining = state.weaponCooldowns[slot.type];
@@ -849,6 +856,8 @@ const EQUIPPED_WEAPON_ICON_DIAMETER = 18;
  * the difference is not visually meaningful. */
 const EQUIPPED_WEAPON_ICON_PIVOT: Vector2 = { x: 0.25, y: 0.75 };
 const EQUIPPED_WEAPON_ICON_BASE_ANGLE = -Math.PI / 6;
+const NUKE_ICON_PIVOT: Vector2 = { x: 0.28, y: 0.62 };
+const NUKE_ICON_BASE_ANGLE = 0;
 
 /** Rotating a sprite continuously past ±90° from its own inherent forward
  * angle makes an icon with an implied "this side up" (a grip, a stock) read
@@ -874,19 +883,23 @@ function drawEquippedWeapons(ctx: CanvasRenderingContext2D, camera: Camera, stat
   const { indices, total } = orbitIndices(state.loadout.slots);
   if (total <= 0) return;
 
-  const { rotation, verticalFlip } = equippedWeaponTransform(aimAngle, EQUIPPED_WEAPON_ICON_BASE_ANGLE);
   state.loadout.slots.forEach((slot, i) => {
     if (slot.type === "turret") return;
     const icon = WEAPON_ICON_SPRITES[slot.type];
     if (!icon) return;
     const orbitPos = weaponOrbitPosition(state.player.pos, indices[i], total);
     const screenPos = worldToScreen(camera, orbitPos);
+    const isNuke = slot.type === "nuke";
+    const { rotation, verticalFlip } = equippedWeaponTransform(
+      aimAngle,
+      isNuke ? NUKE_ICON_BASE_ANGLE : EQUIPPED_WEAPON_ICON_BASE_ANGLE,
+    );
     drawSpriteAboutPivot(
       ctx,
       screenPos,
       icon,
-      worldLengthToScreen(camera, EQUIPPED_WEAPON_ICON_DIAMETER),
-      EQUIPPED_WEAPON_ICON_PIVOT,
+      worldLengthToScreen(camera, isNuke ? EQUIPPED_WEAPON_ICON_DIAMETER * 1.2 : EQUIPPED_WEAPON_ICON_DIAMETER),
+      isNuke ? NUKE_ICON_PIVOT : EQUIPPED_WEAPON_ICON_PIVOT,
       rotation,
       verticalFlip,
     );
@@ -919,7 +932,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, camera: Camera, state
   for (const projectile of state.projectiles) drawProjectile(ctx, camera, projectile);
   for (const explosion of state.explosions) drawExplosion(ctx, camera, explosion, state.elapsedSeconds);
 
-  drawWeaponFlash(ctx, camera, playerScreenPos, state);
+  drawWeaponFlash(ctx, camera, state);
   drawEquippedWeapons(ctx, camera, state);
   drawPlayer(
     ctx,

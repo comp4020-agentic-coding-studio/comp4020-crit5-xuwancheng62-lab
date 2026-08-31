@@ -185,6 +185,9 @@ describe("stepShooter", () => {
 });
 
 describe("stepBoss: idle approach", () => {
+  it("uses the faster 2.4-second attack cooldown", () => {
+    expect(BOSS_ATTACK_COOLDOWN_SECONDS).toBe(2.4);
+  });
   function bossAt(pos: EnemyState["pos"], overrides: Partial<EnemyState> = {}): EnemyState {
     return { ...enemyAt("boss", pos), bossPhase: "idle", bossNormalAttackCount: 0, ...overrides };
   }

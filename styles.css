@@ -184,10 +184,16 @@ canvas {
   background-image: url("./src/sprites/katana.png");
 }
 
-.loadout-slot[data-weapon="pistol"] {
+.loadout-slot[data-weapon="smg"] {
   border-color: #8fd0ff;
   color: #8fd0ff;
   background-image: url("./src/sprites/smg.png");
+}
+
+.loadout-slot[data-weapon="nuke"] {
+  border-color: #d9e34a;
+  color: #d9e34a;
+  background-image: url("./src/sprites/nuke_launcher.png");
 }
 
 .loadout-slot[data-weapon="scattergun"] {

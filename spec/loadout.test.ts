@@ -14,7 +14,7 @@ function applyPickups(types: readonly WeaponId[]): Loadout {
 }
 
 // The spec's required "one important rule, one focused test": the first
-// three distinct weapon types found lock the build for the whole run — no
+// four distinct weapon types found lock the build for the whole run — no
 // swap, no replacement — and only a pickup matching an already-held type
 // does anything once you're full.
 
@@ -26,8 +26,8 @@ describe("applyPickup: a new type with room in the loadout", () => {
 
   it("appends behind existing slots, preserving arrival order", () => {
     const one = applyPickup(EMPTY_LOADOUT, "blade");
-    const two = applyPickup(one, "pistol");
-    expect(two.slots.map((s) => s.type)).toEqual(["blade", "pistol"]);
+    const two = applyPickup(one, "smg");
+    expect(two.slots.map((s) => s.type)).toEqual(["blade", "smg"]);
   });
 });
 
@@ -62,7 +62,7 @@ describe("applyPickup: a repeat of an already-held type", () => {
 
 describe("applyPickup: a new type once all slots are full", () => {
   function fullLoadout(): Loadout {
-    return applyPickups(["blade", "pistol", "scattergun"]);
+    return applyPickups(["smg", "blade", "scattergun", "beam"]);
   }
 
   it(`fills exactly ${MAX_SLOTS} slots from ${MAX_SLOTS} distinct types`, () => {
@@ -70,16 +70,16 @@ describe("applyPickup: a new type once all slots are full", () => {
     expect(isLocked(fullLoadout())).toBe(true);
   });
 
-  it("a 4th distinct type is wasted: the loadout comes back unchanged", () => {
+  it("a 5th distinct type is wasted: the loadout comes back unchanged", () => {
     const before = fullLoadout();
-    const after = applyPickup(before, "beam");
+    const after = applyPickup(before, "rocket");
     expect(after).toBe(before);
-    expect(holds(after, "beam")).toBe(false);
+    expect(holds(after, "rocket")).toBe(false);
   });
 
-  it("every type not among the locked-in three is permanently unreachable", () => {
+  it("every type not among the locked-in four is permanently unreachable", () => {
     const before = fullLoadout();
-    for (const type of ["beam", "rocket", "turret"] as WeaponId[]) {
+    for (const type of ["rocket", "turret", "nuke"] as WeaponId[]) {
       expect(applyPickup(before, type)).toBe(before);
     }
   });
@@ -87,25 +87,26 @@ describe("applyPickup: a new type once all slots are full", () => {
 
 describe("applyPickup: repeats before the loadout is full", () => {
   it("never consume a slot — only a genuinely new type does", () => {
-    // pistol x3 (levels up, same slot), then two new types: exactly 3 slots.
-    const loadout = applyPickups(["pistol", "pistol", "pistol", "blade", "scattergun"]);
-    expect(loadout.slots).toHaveLength(3);
-    expect(levelOf(loadout, "pistol")).toBe(3);
+    // SMG x3 (levels up, same slot), then three new types: exactly 4 slots.
+    const loadout = applyPickups(["smg", "smg", "smg", "blade", "scattergun", "rocket"]);
+    expect(loadout.slots).toHaveLength(4);
+    expect(levelOf(loadout, "smg")).toBe(3);
     expect(levelOf(loadout, "blade")).toBe(1);
     expect(levelOf(loadout, "scattergun")).toBe(1);
+    expect(levelOf(loadout, "rocket")).toBe(1);
 
-    // The build is now locked; a 4th distinct type is wasted.
+    // The build is now locked; a 5th distinct type is wasted.
     const withBeam = applyPickup(loadout, "beam");
     expect(withBeam).toBe(loadout);
   });
 });
 
-describe("applyPickup: which three types lock in is order-sensitive, not level-sensitive", () => {
-  it("interleaving pickups of the same 3 types yields the same locked set regardless of order", () => {
-    const a = applyPickups(["blade", "pistol", "blade", "scattergun", "rocket"]);
-    const b = applyPickups(["blade", "blade", "scattergun", "pistol", "rocket"]);
+describe("applyPickup: which four types lock in is order-sensitive, not level-sensitive", () => {
+  it("interleaving pickups of the same 4 types yields the same locked set regardless of order", () => {
+    const a = applyPickups(["blade", "smg", "blade", "scattergun", "rocket"]);
+    const b = applyPickups(["blade", "blade", "scattergun", "smg", "rocket"]);
     const lockedTypes = (loadout: Loadout) => new Set(loadout.slots.map((s) => s.type));
-    expect(lockedTypes(a)).toEqual(new Set(["blade", "pistol", "scattergun"]));
+    expect(lockedTypes(a)).toEqual(new Set(["blade", "smg", "scattergun", "rocket"]));
     expect(lockedTypes(a)).toEqual(lockedTypes(b));
     // Both fed one extra "blade" repeat before the build locked, so both
     // should show it at level 2, not just "some level > 1".
@@ -120,7 +121,7 @@ describe("applyPickup: immutability", () => {
     const originalSlotsSnapshot = original.slots.map((s) => ({ ...s }));
 
     applyPickup(original, "blade"); // level up
-    applyPickup(original, "pistol"); // new slot
+    applyPickup(original, "smg"); // new slot
 
     expect(original.slots).toEqual(originalSlotsSnapshot);
   });

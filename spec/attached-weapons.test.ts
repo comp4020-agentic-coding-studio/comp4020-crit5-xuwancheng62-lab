@@ -4,7 +4,7 @@ import {
   fireBeam,
   fireBeamVisual,
   fireBlade,
-  firePistol,
+  fireSmg,
   fireRocket,
   fireScattergun,
 } from "../src/game/weapons/attached-weapons";
@@ -17,8 +17,8 @@ describe("attached weapons: knockback, Beam excepted", () => {
     expect(fireBlade(1, PLAYER_POS).knockback).toBeGreaterThan(0);
   });
 
-  it("Pistol's projectile carries a positive knockback", () => {
-    expect(firePistol(1, PLAYER_POS, PLAYER_POS, TARGET_POS).knockback).toBeGreaterThan(0);
+  it("SMG's projectile carries a positive knockback", () => {
+    expect(fireSmg(1, PLAYER_POS, PLAYER_POS, TARGET_POS).knockback).toBeGreaterThan(0);
   });
 
   it("every Scattergun pellet carries a positive knockback", () => {

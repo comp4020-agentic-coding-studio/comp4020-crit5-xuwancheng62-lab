@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_LEVEL } from "../src/game/weapons/loadout";
-import { bladeStats, fistBaseStats, scattergunStats, turretStats, WEAPON_KNOCKBACK_DISTANCE } from "../src/game/weapons/weapon-stats";
+import { bladeStats, nukeStats, scattergunStats, smgStats, turretStats, WEAPON_KNOCKBACK_DISTANCE } from "../src/game/weapons/weapon-stats";
 
 describe("scattergunStats: pellet count across the full 1..MAX_LEVEL range", () => {
   it("never falls through to the old level-4-and-beyond fallback value", () => {
@@ -36,16 +36,23 @@ describe("turretStats: sane numbers across the extended level range", () => {
   });
 });
 
-describe("bladeStats: boosted range, damage and knockback (Blade fully replaces Fist)", () => {
-  it("out-ranges, out-damages and out-knocks Fist at level 1", () => {
-    const blade = bladeStats(1);
-    const fist = fistBaseStats();
-    expect(blade.ringRadius).toBeGreaterThan(fist.range);
-    expect(blade.damage).toBeGreaterThan(fist.damage);
-    expect(blade.knockback).toBeGreaterThan(fist.knockback);
-  });
-
+describe("bladeStats: dedicated melee knockback", () => {
   it("has its own dedicated knockback, not the shared WEAPON_KNOCKBACK_DISTANCE other weapons use", () => {
     expect(bladeStats(1).knockback).toBeGreaterThan(WEAPON_KNOCKBACK_DISTANCE);
+  });
+});
+
+describe("new ranged weapon tuning", () => {
+  it("SMG fires much faster than the nuclear launcher", () => {
+    expect(smgStats(1).cooldownSeconds).toBeLessThan(nukeStats(1).cooldownSeconds);
+  });
+
+  it("Nuke's base cooldown is four seconds", () => {
+    expect(nukeStats(1).cooldownSeconds).toBe(4);
+  });
+
+  it("Nuke has a large, high-damage splash", () => {
+    expect(nukeStats(1).explosionRadius).toBeGreaterThan(100);
+    expect(nukeStats(1).splashDamage).toBeGreaterThan(50);
   });
 });

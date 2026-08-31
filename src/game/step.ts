@@ -14,6 +14,8 @@ import {
   type EnemyState,
 } from "./entities/enemies";
 import {
+  HEALTH_DROP_CHANCE,
+  HEALTH_RESTORE_FRACTION,
   PICKUP_COLLECT_RADIUS,
   WEAPON_DROP_CHANCE,
   XP_ORB_VALUE,
@@ -45,22 +47,22 @@ import {
   fireBeam,
   fireBeamVisual,
   fireBlade,
-  firePistol,
+  fireNuke,
   fireRocket,
   fireScattergun,
+  fireSmg,
   type BeamVisual,
   type InstantEffect,
 } from "./weapons/attached-weapons";
-import { fireFist } from "./weapons/fist";
-import { applyPickup, holds } from "./weapons/loadout";
+import { MAX_SLOTS, applyPickup, holds } from "./weapons/loadout";
 import { orbitIndices, weaponMuzzlePosition, weaponOrbitPosition } from "./weapons/weapon-orbit";
 import {
   beamStats,
   bladeStats,
-  fistBaseStats,
-  pistolStats,
+  nukeStats,
   rocketStats,
   scattergunStats,
+  smgStats,
   turretStats,
 } from "./weapons/weapon-stats";
 import { WEAPON_IDS, type WeaponId } from "./weapons/weapon-types";
@@ -103,6 +105,13 @@ const BOSS_PROJECTILE_LIFESPAN = 3;
  * fade-out timing can never drift out of sync with when the effect is
  * actually removed from state. */
 export const EXPLOSION_EFFECT_DURATION_SECONDS = 0.4;
+export const NUKE_EXPLOSION_EFFECT_DURATION_SECONDS = 0.8;
+
+export function explosionEffectDurationSeconds(effect: ExplosionEffect): number {
+  return effect.sourceWeapon === "nuke"
+    ? NUKE_EXPLOSION_EFFECT_DURATION_SECONDS
+    : EXPLOSION_EFFECT_DURATION_SECONDS;
+}
 
 export function step(
   state: GameState,
@@ -128,24 +137,31 @@ export function step(
   // *which* weapon you happen to path near is the point of the design.
   let xp = state.xp;
   let killCount = state.killCount;
+  const reservedWeaponTypes = new Set<WeaponId>([
+    ...state.loadout.slots.map((slot) => slot.type),
+    ...state.pickups.filter((pickup) => pickup.kind === "weapon").map((pickup) => pickup.weaponType),
+  ]);
 
   function lootFor(killed: readonly EnemyState[]): Pickup[] {
-    const weaponDrops: Pickup[] = [];
+    const drops: Pickup[] = [];
     for (const enemy of killed) {
       xp = gainXp(xp, XP_ORB_VALUE);
-      // The very first kill of the run is guaranteed a weapon, so a bad
-      // drop-chance roll can never leave the opening stuck on Fist alone.
-      const isFirstKillOfRun = killCount === 0;
       killCount += 1;
-      const [roll, afterRoll] = nextFloat(rng);
-      rng = afterRoll;
-      if (isFirstKillOfRun || roll < WEAPON_DROP_CHANCE) {
-        const [weaponType, afterPick] = pick(rng, WEAPON_IDS);
+      const [weaponRoll, afterWeaponRoll] = nextFloat(rng);
+      rng = afterWeaponRoll;
+      if (weaponRoll < WEAPON_DROP_CHANCE) {
+        const missingTypes = WEAPON_IDS.filter((weaponType) => !reservedWeaponTypes.has(weaponType));
+        const needsNewType = state.loadout.slots.length < MAX_SLOTS && missingTypes.length > 0;
+        const [weaponType, afterPick] = pick(rng, needsNewType ? missingTypes : WEAPON_IDS);
         rng = afterPick;
-        weaponDrops.push({ kind: "weapon", id: allocateId("d"), pos: enemy.pos, weaponType });
+        reservedWeaponTypes.add(weaponType);
+        drops.push({ kind: "weapon", id: allocateId("d"), pos: enemy.pos, weaponType });
       }
+      const [healthRoll, afterHealthRoll] = nextFloat(rng);
+      rng = afterHealthRoll;
+      if (healthRoll < HEALTH_DROP_CHANCE) drops.push({ kind: "health", id: allocateId("h"), pos: enemy.pos });
     }
-    return weaponDrops;
+    return drops;
   }
 
   // -- player movement + regen ---------------------------------------------
@@ -228,29 +244,15 @@ export function step(
     };
   });
 
-  // -- weapon systems: Fist (until Blade is picked up) + loadout slots -----
+  // -- weapon systems: loadout slots ---------------------------------------
   const instantEffects: InstantEffect[] = [];
   const weaponCooldowns: Partial<Record<WeaponId, number>> = { ...state.weaponCooldowns };
-  let fistCooldownRemaining = state.fistCooldownRemaining - dtSeconds;
   // Carried over unchanged unless Beam actually fires this tick (see the
   // loop below) — this is what lets the renderer draw a fixed line for the
   // whole flash instead of a value that drifts frame to frame.
   let beamVisual = state.beamVisual;
 
   const nearestEnemy = findNearestEnemy(player.pos, enemies);
-
-  // Blade is Fist's direct upgrade — once it's in the loadout (permanently,
-  // per the build-lock rule) the bare-hands attack never fires again, so
-  // the two melee options don't just stack.
-  const fistDisabled = holds(state.loadout, "blade");
-  if (fistDisabled) {
-    fistCooldownRemaining = Math.max(0, fistCooldownRemaining);
-  } else if (fistCooldownRemaining <= 0) {
-    instantEffects.push(fireFist(player.pos));
-    fistCooldownRemaining = fistBaseStats().cooldownSeconds / characterStats.attackSpeedMultiplier;
-  } else {
-    fistCooldownRemaining = Math.max(0, fistCooldownRemaining);
-  }
 
   // Every non-turret slot's stable index among the OTHER held (non-turret)
   // weapons — this, not firing order, is what the orbiting weapon icons key
@@ -303,7 +305,7 @@ export function step(
   }
   placedEntities = tickedTurrets.map((r) => r.turret).filter((t) => isTurretAlive(t, elapsedSeconds));
 
-  // -- apply instant effects (Blade, Fist, Beam) ----------------------------
+  // -- apply instant effects (Blade, Beam) ----------------------------------
   const pickups: Pickup[] = [...state.pickups];
   const explosions: ExplosionEffect[] = [...state.explosions];
   for (const effect of instantEffects) {
@@ -330,7 +332,32 @@ export function step(
   const survivingProjectiles: Projectile[] = [];
   const incomingEnemyFire: Projectile[] = [];
   for (const projectile of movedProjectiles) {
-    if (isExpired(projectile)) continue;
+    if (isExpired(projectile)) {
+      if (
+        projectile.owner === "player" &&
+        projectile.explodeOnExpiry &&
+        projectile.explodeRadius &&
+        projectile.splashDamage
+      ) {
+        const splash = applyAreaDamage(
+          enemies,
+          projectile.pos,
+          projectile.explodeRadius,
+          projectile.splashDamage,
+          projectile.knockback,
+        );
+        enemies = splash.survivors;
+        pickups.push(...lootFor(splash.killed));
+        explosions.push({
+          id: allocateId("x"),
+          pos: projectile.pos,
+          radius: projectile.explodeRadius,
+          startedAt: elapsedSeconds,
+          sourceWeapon: projectile.sourceWeapon === "nuke" ? "nuke" : "rocket",
+        });
+      }
+      continue;
+    }
     if (projectile.owner === "enemy") {
       incomingEnemyFire.push(projectile);
       continue;
@@ -367,6 +394,7 @@ export function step(
         pos: projectile.pos,
         radius: projectile.explodeRadius,
         startedAt: elapsedSeconds,
+        sourceWeapon: projectile.sourceWeapon === "nuke" ? "nuke" : "rocket",
       });
     }
     const killedByDirectHit = afterHit.filter(isDead);
@@ -414,7 +442,7 @@ export function step(
   }
   player = { ...player, hp, contactInvulnerableRemaining };
 
-  // -- weapon pickups: collected by walking over them, no separate input ----
+  // -- pickups: collected by walking over them, no separate input -----------
   const remainingPickups: Pickup[] = [];
   let loadout = state.loadout;
   for (const pickup of pickups) {
@@ -426,7 +454,25 @@ export function step(
       remainingPickups.push(pickup);
       continue;
     }
-    loadout = applyPickup(loadout, pickup.weaponType);
+    if (pickup.kind === "health") {
+      if (player.hp >= characterStats.maxHealth) {
+        remainingPickups.push(pickup);
+      } else {
+        player = {
+          ...player,
+          hp: Math.min(characterStats.maxHealth, player.hp + characterStats.maxHealth * HEALTH_RESTORE_FRACTION),
+        };
+      }
+      continue;
+    }
+    // Keep the new-type path explicit here: the starting SMG already owns
+    // slot 1, so the third distinct ground weapon must be able to occupy
+    // slot 4. Existing types still level through applyPickup as before.
+    if (!holds(loadout, pickup.weaponType) && loadout.slots.length < MAX_SLOTS) {
+      loadout = { slots: [...loadout.slots, { type: pickup.weaponType, level: 1 }] };
+    } else {
+      loadout = applyPickup(loadout, pickup.weaponType);
+    }
   }
 
   const bossAlive = enemies.some((enemy) => enemy.kind === "boss");
@@ -452,10 +498,9 @@ export function step(
     projectiles: survivingProjectiles,
     placedEntities,
     pickups: remainingPickups,
-    explosions: explosions.filter((e) => elapsedSeconds - e.startedAt < EXPLOSION_EFFECT_DURATION_SECONDS),
+    explosions: explosions.filter((e) => elapsedSeconds - e.startedAt < explosionEffectDurationSeconds(e)),
     spawnDirector: spawnResult.nextState,
     weaponCooldowns,
-    fistCooldownRemaining,
     turretSpawnCooldownRemaining,
     beamVisual,
     bossSpawned,
@@ -497,10 +542,10 @@ function fireAttachedWeapon(
         cooldownSeconds: beamStats(level).cooldownSeconds,
         nextRng: rng,
       };
-    case "pistol":
+    case "smg":
       return {
-        projectiles: [firePistol(level, playerPos, muzzlePos, nearestEnemyPos)],
-        cooldownSeconds: pistolStats(level).cooldownSeconds,
+        projectiles: [fireSmg(level, playerPos, muzzlePos, nearestEnemyPos)],
+        cooldownSeconds: smgStats(level).cooldownSeconds,
         nextRng: rng,
       };
     case "scattergun": {
@@ -515,6 +560,12 @@ function fireAttachedWeapon(
       return {
         projectiles: [fireRocket(level, playerPos, muzzlePos, nearestEnemyPos)],
         cooldownSeconds: rocketStats(level).cooldownSeconds,
+        nextRng: rng,
+      };
+    case "nuke":
+      return {
+        projectiles: [fireNuke(level, playerPos, muzzlePos, nearestEnemyPos)],
+        cooldownSeconds: nukeStats(level).cooldownSeconds,
         nextRng: rng,
       };
     case "turret":

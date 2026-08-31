@@ -125,13 +125,13 @@ export const SHOOTER_FIRE_COOLDOWN_SECONDS = 2.4;
 
 /** Slower than Tank (TANK_SPEED) — a legless hovering mass, not a charger. */
 export const BOSS_SPEED = 22;
-/** 20-25x Tank's health, per the brief — TANK_MAX_HP * 22.5. */
-export const BOSS_MAX_HP = 900;
+/** Reinforced for the final encounter — 50% above the previous 900 HP. */
+export const BOSS_MAX_HP = 1350;
 /** Its own collision radius — deliberately bigger than Tank's (22) to match
  * its bulk, but unrelated to how large it's actually drawn (canvas-renderer.ts
  * renders it 1.6-1.8x Tank's sprite size, purely cosmetic — same
  * radius-vs-sprite-scale split every other enemy kind already has). */
-export const BOSS_RADIUS = 40;
+export const BOSS_RADIUS = 48;
 /** Both the normal and special attack's telegraph — "a clear 0.6-second
  * eye-glow warning" per the brief; reused for the special attack too since
  * no separate duration was specified and a player needs the same fair
@@ -140,7 +140,7 @@ export const BOSS_ATTACK_WARNING_SECONDS = 0.6;
 /** Idle/approach time between the end of one attack and the start of the
  * next warning. Placeholder tuning pending playtesting, like every other
  * enemy's pacing constant in this file. */
-export const BOSS_ATTACK_COOLDOWN_SECONDS = 3;
+export const BOSS_ATTACK_COOLDOWN_SECONDS = 2.4;
 export const BOSS_NORMAL_ATTACKS_BEFORE_SPECIAL = 3;
 export const BOSS_NORMAL_ATTACK_PROJECTILE_COUNT = 8;
 export const BOSS_SPECIAL_ATTACK_PROJECTILE_COUNT = 24;

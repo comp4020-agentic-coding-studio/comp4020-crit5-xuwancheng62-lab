@@ -25,7 +25,7 @@ function chargingTankAt(x: number, y: number, hp = 40): EnemyState {
   };
 }
 
-describe("applyAreaDamage: knockback (Fist, Blade, a Rocket's splash)", () => {
+describe("applyAreaDamage: knockback (Blade and explosive splash)", () => {
   it("pushes a surviving hit directly away from the effect's center", () => {
     const enemy = enemyAt(10, 0); // 10 units to the right of center
     const result = applyAreaDamage([enemy], { x: 0, y: 0 }, 30, 1, 60);
@@ -47,7 +47,7 @@ describe("applyAreaDamage: knockback (Fist, Blade, a Rocket's splash)", () => {
   });
 });
 
-describe("applyPointDamage: knockback (Pistol, Scattergun, Rocket, Turret)", () => {
+describe("applyPointDamage: knockback (SMG, Scattergun, Rocket, Nuke, Turret)", () => {
   it("pushes a surviving hit further along the projectile's own travel direction", () => {
     const enemy = enemyAt(100, 0, 20);
     const result = applyPointDamage(enemy, 1, { direction: { x: 1, y: 0 }, distance: 40 });

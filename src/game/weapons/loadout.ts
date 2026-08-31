@@ -1,11 +1,11 @@
 // The run's defining rule, and the spec's required "one important rule with a
-// focused automated test": the first three DISTINCT weapon types found lock
+// focused automated test": the first four DISTINCT weapon types found lock
 // the build for the entire run. No swap, no replacement, ever. After that, a
 // pickup either levels up a type you already hold, or is wasted.
 
 import type { Loadout, WeaponId, WeaponSlot } from "./weapon-types";
 
-export const MAX_SLOTS = 3;
+export const MAX_SLOTS = 4;
 export const MAX_LEVEL = 8;
 
 /**

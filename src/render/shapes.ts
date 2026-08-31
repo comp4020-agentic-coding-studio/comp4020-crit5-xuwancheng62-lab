@@ -104,11 +104,12 @@ export const PLAYER_SHAPE: PlayerShape = {
 
 const WEAPON_COLORS: Readonly<Record<string, string>> = {
   blade: "#d9d9e3",
-  pistol: "#8fd0ff",
+  smg: "#8fd0ff",
   scattergun: "#ffb37a",
   beam: "#ff6ad5",
   rocket: "#ff6a6a",
   turret: "#8dffb0",
+  nuke: "#d9e34a",
 };
 
 export function colorForWeapon(type: string): string {

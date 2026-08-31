@@ -5,7 +5,7 @@
 // Node can call it directly, the same way it calls any other function.
 //
 // Why this exists: pacing (when Shooter/Tank appear, how fast enemies pile
-// up, whether Fist alone is too weak or too strong) can only really be
+// up and whether the starting weapon is too weak or too strong) can only really be
 // judged by playing — but "does anyone ever win, does everyone die in the
 // first 5 seconds, does the run end at all" is a much cheaper question this
 // can answer BEFORE opening a browser. It is a pre-check, not a substitute

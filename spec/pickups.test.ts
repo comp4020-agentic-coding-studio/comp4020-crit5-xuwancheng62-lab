@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { PICKUP_COLLECT_RADIUS } from "../src/game/entities/pickups";
-import { fistBaseStats } from "../src/game/weapons/weapon-stats";
+import { HEALTH_DROP_CHANCE, PICKUP_COLLECT_RADIUS } from "../src/game/entities/pickups";
 
 describe("PICKUP_COLLECT_RADIUS", () => {
-  it("matches Fist's own attack range exactly", () => {
-    expect(PICKUP_COLLECT_RADIUS).toBe(fistBaseStats().range);
+  it("keeps pickups comfortably collectible without a melee weapon", () => {
+    expect(PICKUP_COLLECT_RADIUS).toBe(42);
+  });
+});
+
+describe("HEALTH_DROP_CHANCE", () => {
+  it("is half of the previous five-percent drop rate", () => {
+    expect(HEALTH_DROP_CHANCE).toBe(0.025);
   });
 });

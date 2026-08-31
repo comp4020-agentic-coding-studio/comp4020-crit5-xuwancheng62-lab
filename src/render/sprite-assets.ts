@@ -25,6 +25,9 @@ import katanaUrl from "../sprites/katana.png";
 import laserBeamUrl from "../sprites/laser_beam.png";
 import launcherUrl from "../sprites/launcher.png";
 import mapUrl from "../sprites/map.png";
+import nukeExplosionUrl from "../sprites/nuke_explosion.png";
+import nukeLauncherUrl from "../sprites/nuke_launcher.png";
+import nukeProjectileUrl from "../sprites/nuke_projectile.png";
 import playerHitUrl from "../sprites/player_hit.png";
 import playerIdleUrl from "../sprites/player_left_idle.png";
 import playerWalkLeftUrl from "../sprites/player_left_walk_left.png";
@@ -123,10 +126,11 @@ export const SPRITES = {
   playerHit: loadImage(playerHitUrl),
   // Weapon icons, keyed by WeaponId.
   blade: loadImage(katanaUrl),
-  pistol: loadImage(smgUrl),
+  smg: loadImage(smgUrl),
   scattergun: loadImage(scattergunUrl),
   beam: loadImage(beamUrl),
   rocket: loadImage(launcherUrl),
+  nuke: loadImage(nukeLauncherUrl),
   crate: loadImage(crateUrl),
   health: loadImage(healthUrl),
   xpOrb: loadImage(xpOrbUrl),
@@ -134,13 +138,15 @@ export const SPRITES = {
   // The actual flying rocket-launcher projectile — distinct from `rocket`
   // above, which is the launcher weapon's pickup/HUD icon.
   rocketProjectile: loadImage(rocketProjectileUrl),
-  // Pistol and Scattergun's flying projectile (every pellet included).
+  nukeProjectile: loadImage(nukeProjectileUrl),
+  // SMG and Scattergun's flying projectile (every pellet included).
   bulletProjectile: loadImage(bulletProjectileUrl),
   // Turret's flying projectile.
   cannonballProjectile: loadImage(cannonballProjectileUrl),
   // One-shot visual played where splash damage from an exploding projectile
   // (Rocket today) actually lands — see game/state.ts's `explosions`.
   explosion: loadImage(explosionUrl),
+  nukeExplosion: loadImage(nukeExplosionUrl),
   turretBase: loadImage(turretBaseUrl),
   turretHead: loadImage(turretHeadUrl),
   // The Beam's fired line — a horizontal strip, bright origin on its left

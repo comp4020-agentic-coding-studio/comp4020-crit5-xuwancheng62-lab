@@ -1,7 +1,7 @@
 // Damage application. Two shapes cover every weapon: an instant circle
-// (Blade, Fist, and a Rocket's splash) and an instant line (Beam) — both
+// (Blade and explosive splash) and an instant line (Beam) — both
 // resolved the moment they fire, nothing persists. Traveling projectiles
-// (Pistol/Scattergun/Rocket's direct hit) are plain circle-circle, handled
+// (SMG/Scattergun/Rocket/Nuke direct hits) are plain circle-circle, handled
 // the same way as any other point-in-time hit.
 
 import { circlesOverlap, segmentIntersectsCircle } from "./collision";
@@ -43,8 +43,8 @@ function partition(
   return { survivors, killed };
 }
 
-/** Blade, Fist, and a Rocket's splash: everyone within `radius` of `center`.
- * `knockbackDistance` (only Fist sets it, via AreaEffect.knockback) shoves a
+/** Blade and explosive splash: everyone within `radius` of `center`.
+ * `knockbackDistance`, when supplied, shoves a
  * surviving hit directly away from `center`; a kill is never also shoved. */
 export function applyAreaDamage(
   enemies: readonly EnemyState[],

@@ -1,7 +1,7 @@
 // Every weapon that fires from the player's current position, rather than
 // being a standalone entity (that's only Turret — see entities/placed-entities.ts).
 // Blade and Beam resolve as an instant effect (see combat.ts) the moment they
-// fire; Pistol/Scattergun/Rocket produce real traveling ProjectileSpawns.
+// fire; SMG/Scattergun/Rocket/Nuke produce real traveling ProjectileSpawns.
 
 import type { ProjectileSpawn } from "../entities/projectiles";
 import type { Rng, Vector2 } from "../types";
@@ -10,9 +10,10 @@ import { angleOf, fromAngle, normalize, scale, subtract } from "../vector";
 import {
   bladeStats,
   beamStats,
-  pistolStats,
+  nukeStats,
   rocketStats,
   scattergunStats,
+  smgStats,
   WEAPON_KNOCKBACK_DISTANCE,
 } from "./weapon-stats";
 
@@ -21,8 +22,7 @@ export interface AreaEffect {
   readonly center: Vector2;
   readonly radius: number;
   readonly damage: number;
-  /** Fist and Blade set this (each with its own dedicated value); a
-   * Rocket's splash uses the shared WEAPON_KNOCKBACK_DISTANCE instead. */
+  /** Optional dedicated knockback for an area attack. */
   readonly knockback?: number;
 }
 
@@ -89,9 +89,9 @@ export function fireBeamVisual(
  * direction is still computed from the player's actual center to the
  * target, so aim, range and damage are exactly what they were before this
  * was introduced. */
-export function firePistol(level: number, playerPos: Vector2, muzzlePos: Vector2, nearestEnemyPos: Vector2): ProjectileSpawn {
-  const stats = pistolStats(level);
-  const direction = normalize(subtract(nearestEnemyPos, playerPos));
+export function fireSmg(level: number, _playerPos: Vector2, muzzlePos: Vector2, nearestEnemyPos: Vector2): ProjectileSpawn {
+  const stats = smgStats(level);
+  const direction = normalize(subtract(nearestEnemyPos, muzzlePos));
   return {
     pos: muzzlePos,
     vel: scale(direction, stats.projectileSpeed),
@@ -100,19 +100,19 @@ export function firePistol(level: number, playerPos: Vector2, muzzlePos: Vector2
     lifespanRemaining: 2,
     owner: "player",
     knockback: WEAPON_KNOCKBACK_DISTANCE,
-    sourceWeapon: "pistol",
+    sourceWeapon: "smg",
   };
 }
 
 export function fireScattergun(
   level: number,
-  playerPos: Vector2,
+  _playerPos: Vector2,
   muzzlePos: Vector2,
   nearestEnemyPos: Vector2,
   rng: Rng,
 ): { spawns: ProjectileSpawn[]; nextRng: Rng } {
   const stats = scattergunStats(level);
-  const baseAngle = angleOf(normalize(subtract(nearestEnemyPos, playerPos)));
+  const baseAngle = angleOf(normalize(subtract(nearestEnemyPos, muzzlePos)));
   const spawns: ProjectileSpawn[] = [];
   let currentRng = rng;
   for (let i = 0; i < stats.pelletCount; i += 1) {
@@ -132,9 +132,9 @@ export function fireScattergun(
   return { spawns, nextRng: currentRng };
 }
 
-export function fireRocket(level: number, playerPos: Vector2, muzzlePos: Vector2, nearestEnemyPos: Vector2): ProjectileSpawn {
+export function fireRocket(level: number, _playerPos: Vector2, muzzlePos: Vector2, nearestEnemyPos: Vector2): ProjectileSpawn {
   const stats = rocketStats(level);
-  const direction = normalize(subtract(nearestEnemyPos, playerPos));
+  const direction = normalize(subtract(nearestEnemyPos, muzzlePos));
   return {
     pos: muzzlePos,
     vel: scale(direction, stats.projectileSpeed),
@@ -147,5 +147,24 @@ export function fireRocket(level: number, playerPos: Vector2, muzzlePos: Vector2
     owner: "player",
     knockback: WEAPON_KNOCKBACK_DISTANCE,
     sourceWeapon: "rocket",
+  };
+}
+
+export function fireNuke(level: number, _playerPos: Vector2, muzzlePos: Vector2, nearestEnemyPos: Vector2): ProjectileSpawn {
+  const stats = nukeStats(level);
+  const direction = normalize(subtract(nearestEnemyPos, muzzlePos));
+  return {
+    pos: muzzlePos,
+    vel: scale(direction, stats.projectileSpeed),
+    radius: stats.projectileRadius,
+    damage: stats.damage,
+    lifespanRemaining: 3.5,
+    onImpact: "explode",
+    explodeOnExpiry: true,
+    explodeRadius: stats.explosionRadius,
+    splashDamage: stats.splashDamage,
+    owner: "player",
+    knockback: stats.knockback,
+    sourceWeapon: "nuke",
   };
 }

@@ -6,7 +6,7 @@ import type { Projectile } from "./entities/projectiles";
 import type { PlacedEntity } from "./entities/placed-entities";
 import type { Pickup } from "./entities/pickups";
 import type { BeamVisual } from "./weapons/attached-weapons";
-import { EMPTY_LOADOUT, type Loadout, type WeaponId } from "./weapons/weapon-types";
+import { INITIAL_LOADOUT, type Loadout, type WeaponId } from "./weapons/weapon-types";
 import { INITIAL_XP_PROGRESS, type XpProgress } from "./leveling/xp";
 import { statsAtCharacterLevel } from "./leveling/player-stats";
 import { INITIAL_SPAWN_DIRECTOR_STATE, type SpawnDirectorState } from "./spawn/spawn-director";
@@ -21,6 +21,7 @@ export interface ExplosionEffect {
   /** Absolute elapsedSeconds the effect started at; age it against the
    * current elapsedSeconds to fade/remove it. */
   readonly startedAt: number;
+  readonly sourceWeapon: "rocket" | "nuke";
 }
 
 export interface GameState {
@@ -32,9 +33,7 @@ export interface GameState {
   readonly player: PlayerState;
   readonly loadout: Loadout;
   readonly xp: XpProgress;
-  /** Total enemies killed this run. Only consulted for one thing: the very
-   * first kill (killCount === 0) always drops a weapon, guaranteeing the
-   * opening isn't Fist-only for the whole run on bad luck. */
+  /** Total enemies killed this run. */
   readonly killCount: number;
 
   readonly enemies: readonly EnemyState[];
@@ -44,7 +43,7 @@ export interface GameState {
   /** One-shot visual effects (currently: an exploding projectile's splash),
    * purely cosmetic — nothing here is read by any damage/collision logic,
    * which already ran by the time one of these is created. See
-   * EXPLOSION_EFFECT_DURATION_SECONDS in step.ts for how long one lives. */
+   * explosionEffectDurationSeconds in step.ts for how long one lives. */
   readonly explosions: readonly ExplosionEffect[];
 
   readonly spawnDirector: SpawnDirectorState;
@@ -54,7 +53,6 @@ export interface GameState {
    * its very next opportunity rather than needing separate init-on-pickup
    * logic. */
   readonly weaponCooldowns: Readonly<Partial<Record<WeaponId, number>>>;
-  readonly fistCooldownRemaining: number;
   readonly turretSpawnCooldownRemaining: number;
 
   /** The most recently fired Beam's locked visual line, or null before Beam
@@ -83,7 +81,7 @@ export function createInitialGameState(seed: number, playerStart: Vector2 = { x:
     nextEntityId: 0,
     ending: "playing",
     player: { pos: playerStart, hp: initialStats.maxHealth, contactInvulnerableRemaining: 0 },
-    loadout: EMPTY_LOADOUT,
+    loadout: INITIAL_LOADOUT,
     xp: INITIAL_XP_PROGRESS,
     killCount: 0,
     enemies: [],
@@ -93,7 +91,6 @@ export function createInitialGameState(seed: number, playerStart: Vector2 = { x:
     explosions: [],
     spawnDirector: INITIAL_SPAWN_DIRECTOR_STATE,
     weaponCooldowns: {},
-    fistCooldownRemaining: 0,
     turretSpawnCooldownRemaining: 0,
     beamVisual: null,
     bossSpawned: false,

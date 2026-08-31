@@ -1,12 +1,13 @@
-export type WeaponId = "blade" | "pistol" | "scattergun" | "beam" | "rocket" | "turret";
+export type WeaponId = "blade" | "smg" | "scattergun" | "beam" | "rocket" | "turret" | "nuke";
 
 export const WEAPON_IDS: readonly WeaponId[] = [
   "blade",
-  "pistol",
+  "smg",
   "scattergun",
   "beam",
   "rocket",
   "turret",
+  "nuke",
 ];
 
 export interface WeaponSlot {
@@ -20,3 +21,4 @@ export interface Loadout {
 }
 
 export const EMPTY_LOADOUT: Loadout = { slots: [] };
+export const INITIAL_LOADOUT: Loadout = { slots: [{ type: "smg", level: 1 }] };

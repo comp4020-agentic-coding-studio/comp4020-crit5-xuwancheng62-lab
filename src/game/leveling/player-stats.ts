@@ -1,7 +1,7 @@
 // Character leveling is a separate axis from weapon leveling: killing enemies
 // grants XP (xp.ts), and crossing a threshold raises ALL SIX of these
 // uniformly — no per-stat choice. This is what applies to every attack,
-// including Fist (which never levels any other way) and every held weapon
+// including every held weapon
 // (on top of that weapon's own 1..4 level from loadout.ts) — two independent
 // multipliers, not one system standing in for the other.
 

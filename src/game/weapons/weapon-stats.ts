@@ -3,24 +3,18 @@
 // than scattered through attached-weapons.ts/placed-weapons.ts. Every base
 // value is a placeholder: pacing is discovered by playing (or by
 // scripts/simulate-runs.ts as a cheap pre-check), never reasoned out in the
-// abstract. Level is always 1..MAX_LEVEL from loadout.ts, except Fist, which
-// never levels via pickup at all.
+// abstract. Level is always 1..MAX_LEVEL from loadout.ts.
 
 import { statAt } from "../stat-curve";
 
-/** Shared knockback distance for every weapon hit except Beam (a piercing
- * line — shoving what it pierces would fight its own pierce-through
- * purpose). Fist has its own dedicated, already-tuned value instead of this
- * one; see FistStats.knockback. */
+/** Shared knockback distance for every ordinary weapon hit except Beam. */
 export const WEAPON_KNOCKBACK_DISTANCE = 50;
 
 export interface BladeStats {
   damage: number;
   cooldownSeconds: number;
   ringRadius: number;
-  /** Blade's own dedicated knockback — stronger than the shared
-   * WEAPON_KNOCKBACK_DISTANCE other weapons use, since once picked up it
-   * fully replaces Fist (see step.ts) as the player's melee option. */
+  /** Blade's own dedicated knockback — stronger than the shared value. */
   knockback: number;
 }
 export function bladeStats(level: number): BladeStats {
@@ -32,18 +26,18 @@ export function bladeStats(level: number): BladeStats {
   };
 }
 
-export interface PistolStats {
+export interface SmgStats {
   damage: number;
   cooldownSeconds: number;
   projectileSpeed: number;
   projectileRadius: number;
 }
-export function pistolStats(level: number): PistolStats {
+export function smgStats(level: number): SmgStats {
   return {
-    damage: statAt(level, 5, 2),
-    cooldownSeconds: statAt(level, 0.7, -0.1),
-    projectileSpeed: statAt(level, 260, 15),
-    projectileRadius: 5,
+    damage: statAt(level, 3, 1),
+    cooldownSeconds: statAt(level, 0.32, -0.025),
+    projectileSpeed: statAt(level, 280, 15),
+    projectileRadius: 4,
   };
 }
 
@@ -105,6 +99,27 @@ export function rocketStats(level: number): RocketStats {
   };
 }
 
+export interface NukeStats {
+  damage: number;
+  cooldownSeconds: number;
+  projectileSpeed: number;
+  projectileRadius: number;
+  explosionRadius: number;
+  splashDamage: number;
+  knockback: number;
+}
+export function nukeStats(level: number): NukeStats {
+  return {
+    damage: statAt(level, 20, 5),
+    cooldownSeconds: statAt(level, 4, -0.275),
+    projectileSpeed: 110,
+    projectileRadius: 8,
+    explosionRadius: statAt(level, 120, 10),
+    splashDamage: statAt(level, 90, 18),
+    knockback: 120,
+  };
+}
+
 export interface TurretStats {
   maxHp: number;
   damage: number;
@@ -122,18 +137,4 @@ export function turretStats(level: number): TurretStats {
     lifespanSeconds: statAt(level, 8, 2),
     spawnCooldownSeconds: 6,
   };
-}
-export interface FistStats {
-  damage: number;
-  cooldownSeconds: number;
-  range: number;
-  /** How far a hit enemy is shoved directly away from the player — Fist's
-   * one distinguishing feature besides being always-on, useful for creating
-   * breathing room in a rusher-only opening before any real weapon exists. */
-  knockback: number;
-}
-/** Fist never levels via pickup — it only scales with the character's own
- * level (see leveling/player-stats.ts), so this returns a fixed baseline. */
-export function fistBaseStats(): FistStats {
-  return { damage: 2, cooldownSeconds: 0.5, range: 42, knockback: 60 };
 }

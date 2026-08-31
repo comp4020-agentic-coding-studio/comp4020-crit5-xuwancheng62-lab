@@ -15,32 +15,38 @@ import bossRoar3Url from "../sounds/boss_roar_03.wav";
 import bossRoar4Url from "../sounds/boss_roar_04.wav";
 import bossRoar5Url from "../sounds/boss_roar_05.wav";
 import bossRoar6Url from "../sounds/boss_roar_06.wav";
-import pistolFireUrl from "../sounds/pistol_fire.wav";
+import nukeExplosionUrl from "../sounds/nuke_explosion.wav";
+import nukeLaunchUrl from "../sounds/nuke_launch.wav";
 import playerHitUrl from "../sounds/player_hit.wav";
 import rocketExplosionUrl from "../sounds/rocket_explosion.wav";
 import rocketLaunchUrl from "../sounds/rocket_launch.wav";
 import scattergunFireUrl from "../sounds/scattergun_fire.wav";
+import smgFireUrl from "../sounds/smg_fire.wav";
 import turretFireUrl from "../sounds/turret_fire.wav";
 import { getAudioContext } from "./audio-context";
 import type { WeaponId } from "../game/weapons/weapon-types";
 
 export type SoundEffectName =
-  | "pistolFire"
+  | "smgFire"
   | "scattergunFire"
   | "turretFire"
   | "beamFire"
   | "rocketLaunch"
   | "rocketExplosion"
+  | "nukeLaunch"
+  | "nukeExplosion"
   | "playerHit"
   | "bossDeath";
 
 const SOUND_URLS: Record<SoundEffectName, string> = {
-  pistolFire: pistolFireUrl,
+  smgFire: smgFireUrl,
   scattergunFire: scattergunFireUrl,
   turretFire: turretFireUrl,
   beamFire: beamFireUrl,
   rocketLaunch: rocketLaunchUrl,
   rocketExplosion: rocketExplosionUrl,
+  nukeLaunch: nukeLaunchUrl,
+  nukeExplosion: nukeExplosionUrl,
   playerHit: playerHitUrl,
   bossDeath: bossDeathUrl,
 };
@@ -52,10 +58,11 @@ const SOUND_URLS: Record<SoundEffectName, string> = {
  * turret instance) since weaponCooldowns.turret tracks the "deploy the next
  * batch of turrets" timer, not an individual shot. */
 const WEAPON_FIRE_SOUND: Partial<Record<WeaponId, SoundEffectName>> = {
-  pistol: "pistolFire",
+  smg: "smgFire",
   scattergun: "scattergunFire",
   beam: "beamFire",
   rocket: "rocketLaunch",
+  nuke: "nukeLaunch",
 };
 
 const BOSS_ROAR_URLS = [bossRoar1Url, bossRoar2Url, bossRoar3Url, bossRoar4Url, bossRoar5Url, bossRoar6Url];
@@ -86,7 +93,7 @@ export function preloadSoundEffects(): void {
   for (const url of BOSS_ROAR_URLS) loadBuffer(ctx, url);
 }
 
-/** Modest headroom so several one-shot effects overlapping (rapid pistol
+/** Modest headroom so several one-shot effects overlapping (rapid SMG
  * fire, a turret volley, a hit landing) don't sum into clipping — Web Audio
  * has no limiter on ctx.destination by default. */
 const DEFAULT_GAIN = 0.6;

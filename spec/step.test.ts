@@ -16,22 +16,14 @@ function runFor(state: ReturnType<typeof createInitialGameState>, seconds: numbe
   return s;
 }
 
-describe("step: Blade permanently replaces Fist once picked up", () => {
-  it("Fist never fires again — its cooldown stays pinned at 0, not reset to a fresh full value", () => {
+describe("step: initial weapon", () => {
+  it("starts with a level-1 SMG and no bare-hands attack state", () => {
     const state = createInitialGameState(50);
-    expect(state.fistCooldownRemaining).toBe(0); // ready to fire this very tick, if anything is going to
-    const withBlade: GameState = { ...state, loadout: { slots: [{ type: "blade", level: 1 }] } };
-    const after = step(withBlade, NO_MOVEMENT, DT);
-    expect(after.fistCooldownRemaining).toBe(0);
+    expect(state.loadout.slots).toEqual([{ type: "smg", level: 1 }]);
+    expect("fistCooldownRemaining" in state).toBe(false);
   });
 
-  it("contrast: without Blade, Fist fires this same tick and its cooldown resets to a real value", () => {
-    const state = createInitialGameState(50);
-    const after = step(state, NO_MOVEMENT, DT);
-    expect(after.fistCooldownRemaining).toBeGreaterThan(0.4);
-  });
-
-  it("Blade alone still lands its own hit on a nearby enemy even with Fist disabled", () => {
+  it("Blade still lands its own hit on a nearby enemy", () => {
     const state = createInitialGameState(51);
     const withBladeAndTarget: GameState = {
       ...state,
@@ -95,24 +87,16 @@ describe("step: the whole loop wired together", () => {
     expect(after.enemies.length).toBeGreaterThan(0);
   });
 
-  it("Fist attacks on its own and can kill an enemy without any weapon equipped", () => {
+  it("the initial SMG attacks on its own and can kill enemies", () => {
     const state = createInitialGameState(1);
     const after = runFor(state, 15);
-    // Nothing in the loadout, Fist alone should have landed a kill by now
-    // (the very first rusher spawns adjacent-ish and is low HP).
+    // The starting SMG should have landed a kill by now.
     expect(after.xp.level > 1 || after.xp.xp > 0).toBe(true);
   });
 
   it("a kill's dropped loot flows through to a level-up", () => {
-    // Deterministic, not a balance test: a low-HP enemy placed well within
-    // Fist's range but just outside contact range, so it dies to Fist alone
-    // without the noise of the spawn director's random timing/positioning.
-    // Whether Fist reliably lands kills from a natural spawn is a *balance*
-    // question for playtesting/simulate-runs.ts, not this test's job.
-    // Close enough that Fist's radius (34) reaches it AND its death
-    // position still falls within the pickup-collection radius (16), so the
-    // dropped XP orb is collectible the same frame — not testing "does loot
-    // teleport to you across the arena", which it correctly does not.
+    // Deterministic, not a balance test: a low-HP enemy placed close enough
+    // for the starting SMG projectile to overlap it on the first tick.
     const state = createInitialGameState(2);
     const withWeakAdjacentEnemy = {
       ...state,
@@ -128,7 +112,7 @@ describe("step: the whole loop wired together", () => {
         },
       ],
     };
-    const after = step(withWeakAdjacentEnemy, NO_MOVEMENT, DT);
+    const after = runFor(withWeakAdjacentEnemy, 1);
     // Checking the specific target is gone, not that `enemies` is empty —
     // the spawn director also fires this same frame and adds an unrelated
     // fresh rusher at the spawn ring, which is correct and expected.
@@ -136,12 +120,7 @@ describe("step: the whole loop wired together", () => {
     expect(after.xp.xp).toBeGreaterThan(0); // or leveled — either way, loot landed
   });
 
-  it("the first enemy killed in the run always drops a weapon, regardless of the roll", () => {
-    // 30 units away: within Fist's 42-unit range (survives the overlap test
-    // against its own radius). The pickup-collect radius now matches that
-    // same 42-unit range, so the dropped weapon is collected the very
-    // instant it lands — landing straight in the loadout is exactly what
-    // proves both the guaranteed drop AND the matched pickup range worked.
+  it("does not require a guaranteed first-kill weapon because SMG is already equipped", () => {
     const state = createInitialGameState(42);
     expect(state.killCount).toBe(0);
     const withWeakEnemy = {
@@ -150,7 +129,7 @@ describe("step: the whole loop wired together", () => {
         {
           id: "target",
           kind: "rusher" as const,
-          pos: { x: state.player.pos.x + 30, y: state.player.pos.y },
+          pos: { x: state.player.pos.x + 10, y: state.player.pos.y },
           radius: 11,
           hp: 1,
           maxHp: 6,
@@ -158,9 +137,9 @@ describe("step: the whole loop wired together", () => {
         },
       ],
     };
-    const after = step(withWeakEnemy, NO_MOVEMENT, DT);
+    const after = runFor(withWeakEnemy, 1);
     expect(after.killCount).toBe(1);
-    expect(after.loadout.slots).toHaveLength(1);
+    expect(after.loadout.slots[0]).toEqual({ type: "smg", level: 1 });
   });
 
   it("walking onto a weapon pickup updates the loadout", () => {
@@ -168,11 +147,53 @@ describe("step: the whole loop wired together", () => {
     const withPickup = {
       ...state,
       pickups: [
-        { kind: "weapon" as const, id: "test-pickup", pos: state.player.pos, weaponType: "pistol" as const },
+        { kind: "weapon" as const, id: "test-pickup", pos: state.player.pos, weaponType: "smg" as const },
       ],
     };
     const after = step(withPickup, NO_MOVEMENT, DT);
-    expect(after.loadout.slots).toEqual([{ type: "pistol", level: 1 }]);
+    expect(after.loadout.slots).toEqual([{ type: "smg", level: 2 }]);
+    expect(after.pickups).toHaveLength(0);
+  });
+
+  it("fills the fourth slot after the starting SMG plus three distinct pickups", () => {
+    let state = createInitialGameState(300);
+    for (const weaponType of ["blade", "beam", "rocket"] as const) {
+      state = step(
+        {
+          ...state,
+          weaponCooldowns: { smg: 99, blade: 99, beam: 99, rocket: 99 },
+          pickups: [{ kind: "weapon", id: `pickup-${weaponType}`, pos: state.player.pos, weaponType }],
+        },
+        NO_MOVEMENT,
+        DT,
+      );
+    }
+    expect(state.loadout.slots.map((slot) => slot.type)).toEqual(["smg", "blade", "beam", "rocket"]);
+    expect(state.pickups).toHaveLength(0);
+  });
+
+  it("equips Rocket in slot four from the exact HUD state in the reported bug", () => {
+    const state = createInitialGameState(301);
+    const reportedState: GameState = {
+      ...state,
+      loadout: {
+        slots: [
+          { type: "smg", level: 5 },
+          { type: "blade", level: 2 },
+          { type: "turret", level: 2 },
+        ],
+      },
+      weaponCooldowns: { smg: 99, blade: 99, turret: 99 },
+      turretSpawnCooldownRemaining: 99,
+      pickups: [{ kind: "weapon", id: "reported-rocket", pos: state.player.pos, weaponType: "rocket" }],
+    };
+    const after = step(reportedState, NO_MOVEMENT, DT);
+    expect(after.loadout.slots).toEqual([
+      { type: "smg", level: 5 },
+      { type: "blade", level: 2 },
+      { type: "turret", level: 2 },
+      { type: "rocket", level: 1 },
+    ]);
     expect(after.pickups).toHaveLength(0);
   });
 
@@ -185,12 +206,37 @@ describe("step: the whole loop wired together", () => {
           kind: "weapon" as const,
           id: "far-pickup",
           pos: { x: state.player.pos.x + 5000, y: state.player.pos.y },
-          weaponType: "pistol" as const,
+          weaponType: "smg" as const,
         },
       ],
     };
     const after = step(farPickup, NO_MOVEMENT, DT);
-    expect(after.loadout.slots).toEqual([]);
+    expect(after.loadout.slots).toEqual([{ type: "smg", level: 1 }]);
+    expect(after.pickups).toHaveLength(1);
+  });
+
+  it("a health pickup restores 20% max health and is consumed", () => {
+    const state = createInitialGameState(4);
+    const maxHealth = state.player.hp;
+    const wounded: GameState = {
+      ...state,
+      player: { ...state.player, hp: maxHealth * 0.5 },
+      weaponCooldowns: { smg: 10 },
+      pickups: [{ kind: "health", id: "health", pos: state.player.pos }],
+    };
+    const after = step(wounded, NO_MOVEMENT, DT);
+    expect(after.player.hp).toBeCloseTo(maxHealth * 0.7, 1);
+    expect(after.pickups).toHaveLength(0);
+  });
+
+  it("does not waste a health pickup at full health", () => {
+    const state = createInitialGameState(5);
+    const full: GameState = {
+      ...state,
+      weaponCooldowns: { smg: 10 },
+      pickups: [{ kind: "health", id: "health", pos: state.player.pos }],
+    };
+    const after = step(full, NO_MOVEMENT, DT);
     expect(after.pickups).toHaveLength(1);
   });
 });
@@ -242,16 +288,13 @@ describe("step: enemy gunfire cannot hit enemies, including its own shooter", ()
 
 describe("step: weapon hits knock enemies back, Beam excepted", () => {
   // A tank placed 5 units in front of the player: close enough that a
-  // Pistol/Beam shot fired this same frame reaches it in the same step
+  // SMG/Beam shot fired this same frame reaches it in the same step
   // (it's a slow-moving projectile relative to the frame's dt, so it must
   // start almost touching its target to land a hit within one tick).
-  // Fist is held mid-cooldown so it never fires and never adds its own
-  // knockback into the measurement.
-  function withGunAndTank(loadoutType: "pistol" | "beam") {
+  function withGunAndTank(loadoutType: "smg" | "beam") {
     const state = createInitialGameState(20);
     return {
       ...state,
-      fistCooldownRemaining: 10,
       loadout: { slots: [{ type: loadoutType, level: 1 as const }] },
       enemies: [
         { id: "target", kind: "tank" as const, pos: { x: 5, y: 0 }, radius: 22, hp: 999, maxHp: 999, attackCooldownRemaining: 0 },
@@ -259,14 +302,14 @@ describe("step: weapon hits knock enemies back, Beam excepted", () => {
     };
   }
 
-  it("Pistol shoves a surviving hit well beyond what the enemy's own movement explains", () => {
-    const before = withGunAndTank("pistol");
+  it("SMG shoves a surviving hit well beyond what the enemy's own movement explains", () => {
+    const before = withGunAndTank("smg");
     const after = step(before, NO_MOVEMENT, DT);
     const target = after.enemies.find((e) => e.id === "target");
     expect(target).toBeDefined();
     // Tank's own AI closes at ~38 units/s (~0.6 units this one frame); a
     // move far beyond that can only be the shot's knockback.
-    expect(target!.pos.x).toBeGreaterThan(before.enemies[0].pos.x + 20);
+    expect(distance(target!.pos, before.enemies[0].pos)).toBeGreaterThan(20);
   });
 
   it("Beam deals its hit but never knocks the target back", () => {
@@ -278,6 +321,45 @@ describe("step: weapon hits knock enemies back, Beam excepted", () => {
     // Only the tank's own slow approach should move it — nothing like a
     // 50-unit shove.
     expect(target!.pos.x).toBeLessThan(before.enemies[0].pos.x + 5);
+  });
+});
+
+describe("step: nuclear launcher", () => {
+  it("detonates an expired nuclear projectile with large splash damage", () => {
+    const state = createInitialGameState(60);
+    const target = {
+      id: "target",
+      kind: "tank" as const,
+      pos: { x: 50, y: 0 },
+      radius: 22,
+      hp: 200,
+      maxHp: 200,
+      attackCooldownRemaining: 999,
+    };
+    const armed: GameState = {
+      ...state,
+      weaponCooldowns: { smg: 10 },
+      enemies: [target],
+      projectiles: [{
+        id: "nuke-projectile",
+        pos: { x: 0, y: 0 },
+        vel: { x: 0, y: 0 },
+        radius: 8,
+        damage: 20,
+        lifespanRemaining: 0.001,
+        onImpact: "explode",
+        explodeOnExpiry: true,
+        explodeRadius: 120,
+        splashDamage: 90,
+        owner: "player",
+        knockback: 120,
+        sourceWeapon: "nuke",
+      }],
+    };
+    const after = step(armed, NO_MOVEMENT, DT);
+    expect(after.projectiles.find((p) => p.id === "nuke-projectile")).toBeUndefined();
+    expect(after.enemies.find((enemy) => enemy.id === "target")!.hp).toBe(110);
+    expect(after.explosions.some((effect) => effect.sourceWeapon === "nuke")).toBe(true);
   });
 });
 
@@ -369,11 +451,11 @@ describe("step: contact damage", () => {
     const state = createInitialGameState(4);
     const touching = {
       ...state,
-      // Fist held mid-cooldown so it doesn't also fire this frame — its
-      // knockback would shove a same-position enemy out of contact range
+      // SMG held mid-cooldown so it doesn't also fire this frame — its
+      // knockback could shove a same-position enemy out of contact range
       // before the melee check below runs, which isn't what this test is
       // isolating.
-      fistCooldownRemaining: 10,
+      weaponCooldowns: { smg: 10 },
       enemies: [
         { id: "toucher", kind: "tank" as const, pos: state.player.pos, radius: 22, hp: 999, maxHp: 999, attackCooldownRemaining: 0 },
       ],
@@ -394,7 +476,7 @@ describe("step: contact damage", () => {
 describe("step: ending", () => {
   it("is a loss once health reaches zero", () => {
     const state = createInitialGameState(5);
-    const dying = { ...state, player: { ...state.player, hp: 0.001 }, fistCooldownRemaining: 10 };
+    const dying = { ...state, player: { ...state.player, hp: 0.001 }, weaponCooldowns: { smg: 10 } };
     const lethalEnemy = {
       ...dying,
       enemies: [
@@ -424,7 +506,7 @@ describe("step: ending", () => {
       ...state,
       elapsedSeconds: RUN_LENGTH_SECONDS - DT / 2,
       player: { ...state.player, hp: 0.001 },
-      fistCooldownRemaining: 10,
+      weaponCooldowns: { smg: 10 },
       enemies: [
         { id: "lethal", kind: "tank" as const, pos: state.player.pos, radius: 22, hp: 999, maxHp: 999, attackCooldownRemaining: 0 },
       ],
@@ -469,9 +551,9 @@ describe("step: Boss integration", () => {
     expect(bosses[0].maxHp).toBe(BOSS_MAX_HP);
   });
 
-  it("gives the Boss roughly 20-25x the Tank's max health", () => {
-    expect(BOSS_MAX_HP).toBeGreaterThanOrEqual(TANK_MAX_HP * 20);
-    expect(BOSS_MAX_HP).toBeLessThanOrEqual(TANK_MAX_HP * 25);
+  it("gives the reinforced Boss 1,350 HP", () => {
+    expect(BOSS_MAX_HP).toBe(1350);
+    expect(BOSS_MAX_HP).toBeGreaterThan(TANK_MAX_HP * 30);
   });
 
   it("never spawns a second Boss later in the same run, even across many ticks past 80s", () => {
@@ -509,7 +591,6 @@ describe("step: Boss integration", () => {
       enemies: [boss],
       loadout: { slots: [{ type: "blade", level: 1 }] },
       weaponCooldowns: { blade: 0 },
-      fistCooldownRemaining: 10,
     };
     expect(armed.ending).toBe("playing"); // Boss alive, timer long past irrelevant
     const after = step(armed, NO_MOVEMENT, DT);
@@ -542,7 +623,7 @@ describe("step: Boss integration", () => {
       bossSpawned: true,
       enemies: [boss, lethalTank],
       player: { ...state.player, hp: 0.001 },
-      fistCooldownRemaining: 10,
+      weaponCooldowns: { smg: 10 },
     };
     const after = step(dying, NO_MOVEMENT, DT);
     expect(after.ending).toBe("lost");
